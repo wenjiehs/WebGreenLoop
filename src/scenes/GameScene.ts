@@ -1010,6 +1010,9 @@ export class GameScene extends Phaser.Scene {
     this.clearPlacementGhost();
     this.infoPanel.setVisible(false);
     this.highlightShopButton(-1);
+    // 清除3D选中
+    const bridge = (window as any).__gameBridge;
+    if (bridge) { bridge.clearSelection(); bridge.clearBuildPreview(); }
   }
 
   private clearPlacementGhost(): void {
@@ -1486,6 +1489,12 @@ export class GameScene extends Phaser.Scene {
 
     // 波次横幅动画
     this.showWaveBanner(waveNum);
+
+    // 3D 波次事件
+    const bridge3dWave = (window as any).__gameBridge;
+    if (bridge3dWave && (window as any).__3dEnabled) {
+      bridge3dWave.onWaveStart(waveNum, config.isBossWave);
+    }
   }
 
   private onWaveComplete(waveNum: number): void {
@@ -1605,6 +1614,11 @@ export class GameScene extends Phaser.Scene {
 
   private showTowerInfo(tower: Tower): void {
     this.infoPanel.setVisible(true);
+    // 3D 选中高亮
+    const bridge = (window as any).__gameBridge;
+    if (bridge && (window as any).__3dEnabled) {
+      bridge.showSelection(tower.x, tower.y, tower.getRange());
+    }
     const config = tower.getConfig();
     const upgradeCost = tower.getUpgradeCost();
 

@@ -2,45 +2,48 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../utils/constants';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
+import { GAME_WIDTH, GAME_HEIGHT } from '../utils/constants';
 
 const SCALE = 0.05;
 const UI_HEIGHT_3D = 140;
+const MAP_H = GAME_HEIGHT - UI_HEIGHT_3D;
 
 /**
- * Three.js 渲染器 - Scene/Camera/Lights/PostProcessing
+ * Three.js 渲染器 - Scene/Camera/Lights/PostProcessing/Camera Controls
  */
 export class ThreeRenderer {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
   private composer: EffectComposer;
-  private bloomPass: UnrealBloomPass;
+  sunLight!: THREE.DirectionalLight;
 
-  // 摄像机控制
+  // 摄像机
   private cameraTarget = new THREE.Vector3(0, 0, 0);
   private cameraZoom = 1;
   private isDragging = false;
   private lastMouse = { x: 0, y: 0 };
+  private targetZoom = 1;
 
   // 时间
   private clock = new THREE.Clock();
+  private elapsed = 0;
 
   constructor(container: HTMLElement) {
-    // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1a2a0e);
-    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.006);
+    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.005);
 
-    // Camera - 45° 俯视
-    const aspect = GAME_WIDTH / (GAME_HEIGHT - UI_HEIGHT_3D);
-    const frustumSize = 22;
+    // Camera - 魔兽3 经典 45° 俯视
+    const aspect = GAME_WIDTH / MAP_H;
+    const frustumSize = 20;
     this.camera = new THREE.OrthographicCamera(
       -frustumSize * aspect / 2, frustumSize * aspect / 2,
-      frustumSize / 2, -frustumSize / 2,
-      0.1, 200,
+      frustumSize / 2, -frustumSize / 2, 0.1, 200,
     );
-    this.camera.position.set(15, 25, 15);
+    this.camera.position.set(12, 22, 12);
     this.camera.lookAt(0, 0, 0);
 
     // Renderer
@@ -50,53 +53,56 @@ export class ThreeRenderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.3;
+    this.renderer.toneMappingExposure = 1.2;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.position = 'absolute';
     this.renderer.domElement.style.top = '0';
     this.renderer.domElement.style.left = '0';
 
-    // 后处理 - Bloom
+    // 后处理
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
-    this.bloomPass = new UnrealBloomPass(
+    const bloom = new UnrealBloomPass(
       new THREE.Vector2(container.clientWidth, container.clientHeight),
-      0.4,   // strength
-      0.3,   // radius
-      0.85,  // threshold
+      0.35, 0.4, 0.85,
     );
-    this.composer.addPass(this.bloomPass);
+    this.composer.addPass(bloom);
+
+    const fxaa = new FXAAPass();
+    fxaa.uniforms['resolution'].value.set(1 / container.clientWidth, 1 / container.clientHeight);
+    this.composer.addPass(fxaa);
 
     this.setupLights();
     this.setupCameraControls(this.renderer.domElement);
   }
 
   private setupLights(): void {
-    // 太阳光（暖色，带阴影）
-    const sunLight = new THREE.DirectionalLight(0xFFEECC, 2.0);
-    sunLight.position.set(20, 30, 10);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(2048, 2048);
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 80;
-    sunLight.shadow.camera.left = -30;
-    sunLight.shadow.camera.right = 30;
-    sunLight.shadow.camera.top = 30;
-    sunLight.shadow.camera.bottom = -30;
-    sunLight.shadow.bias = -0.0005;
-    this.scene.add(sunLight);
+    // 太阳光
+    this.sunLight = new THREE.DirectionalLight(0xFFEECC, 2.2);
+    this.sunLight.position.set(20, 35, 15);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.sunLight.shadow.camera.near = 0.5;
+    this.sunLight.shadow.camera.far = 100;
+    this.sunLight.shadow.camera.left = -35;
+    this.sunLight.shadow.camera.right = 35;
+    this.sunLight.shadow.camera.top = 35;
+    this.sunLight.shadow.camera.bottom = -35;
+    this.sunLight.shadow.bias = -0.0003;
+    this.scene.add(this.sunLight);
 
-    // 环境光
     this.scene.add(new THREE.AmbientLight(0x445566, 0.5));
+    this.scene.add(new THREE.HemisphereLight(0x88BBEE, 0x445522, 0.35));
 
-    // 半球光
-    this.scene.add(new THREE.HemisphereLight(0x88BBEE, 0x445522, 0.4));
+    const fill = new THREE.DirectionalLight(0x8888CC, 0.25);
+    fill.position.set(-15, 20, -10);
+    this.scene.add(fill);
 
-    // 微弱补光（填补阴影暗部）
-    const fillLight = new THREE.DirectionalLight(0x8888CC, 0.3);
-    fillLight.position.set(-10, 15, -10);
-    this.scene.add(fillLight);
+    // 地面微弱点光（暖色氛围）
+    const warm = new THREE.PointLight(0xFF8844, 0.15, 30);
+    warm.position.set(0, 3, 0);
+    this.scene.add(warm);
   }
 
   private setupCameraControls(canvas: HTMLElement): void {
@@ -106,26 +112,40 @@ export class ThreeRenderer {
     });
     canvas.addEventListener('mousemove', (e) => {
       if (!this.isDragging) return;
-      const dx = (e.clientX - this.lastMouse.x) * 0.05;
-      const dy = (e.clientY - this.lastMouse.y) * 0.05;
+      const dx = (e.clientX - this.lastMouse.x) * 0.04 / this.cameraZoom;
+      const dy = (e.clientY - this.lastMouse.y) * 0.04 / this.cameraZoom;
       this.cameraTarget.x -= dx;
       this.cameraTarget.z -= dy;
       this.lastMouse = { x: e.clientX, y: e.clientY };
-      this.updateCameraPosition();
     });
-    canvas.addEventListener('mouseup', () => { this.isDragging = false; });
+    window.addEventListener('mouseup', () => { this.isDragging = false; });
     canvas.addEventListener('wheel', (e) => {
-      this.cameraZoom = Math.max(0.5, Math.min(2.5, this.cameraZoom + e.deltaY * 0.001));
-      this.updateCameraPosition();
+      this.targetZoom = Math.max(0.4, Math.min(3.0, this.targetZoom + e.deltaY * 0.0015));
     });
   }
 
+  /** 聚焦到 Phaser 坐标 */
+  focusOn(px: number, py: number): void {
+    const pos = ThreeRenderer.toWorld(px, py, 0);
+    this.cameraTarget.set(pos.x, 0, pos.z);
+  }
+
+  render(): void {
+    this.elapsed = this.clock.getElapsedTime();
+
+    // 平滑缩放
+    this.cameraZoom += (this.targetZoom - this.cameraZoom) * 0.1;
+    this.updateCameraPosition();
+
+    this.composer.render();
+  }
+
   private updateCameraPosition(): void {
-    const d = 25 / this.cameraZoom;
-    this.camera.position.set(this.cameraTarget.x + d * 0.6, d, this.cameraTarget.z + d * 0.6);
+    const d = 22 / this.cameraZoom;
+    this.camera.position.set(this.cameraTarget.x + d * 0.55, d, this.cameraTarget.z + d * 0.55);
     this.camera.lookAt(this.cameraTarget);
-    const frustumSize = 22 / this.cameraZoom;
-    const aspect = GAME_WIDTH / (GAME_HEIGHT - UI_HEIGHT_3D);
+    const frustumSize = 20 / this.cameraZoom;
+    const aspect = GAME_WIDTH / MAP_H;
     this.camera.left = -frustumSize * aspect / 2;
     this.camera.right = frustumSize * aspect / 2;
     this.camera.top = frustumSize / 2;
@@ -133,27 +153,20 @@ export class ThreeRenderer {
     this.camera.updateProjectionMatrix();
   }
 
-  render(): void {
-    this.composer.render();
-  }
-
-  getTime(): number { return this.clock.getElapsedTime(); }
+  getTime(): number { return this.elapsed; }
 
   resize(w: number, h: number): void {
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
-    this.updateCameraPosition();
   }
 
-  dispose(): void {
-    this.renderer.dispose();
-  }
+  dispose(): void { this.renderer.dispose(); }
 
   static toWorld(px: number, py: number, elevation: number = 0): THREE.Vector3 {
     return new THREE.Vector3(
       (px - GAME_WIDTH / 2) * SCALE,
       elevation,
-      (py - (GAME_HEIGHT - UI_HEIGHT_3D) / 2) * SCALE,
+      (py - MAP_H / 2) * SCALE,
     );
   }
 

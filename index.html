@@ -20,28 +20,32 @@
       width: 1280px;
       height: 720px;
     }
-    /* 3D 渲染层 */
+    /* 3D 渲染层 - 固定尺寸覆盖整个游戏区 */
     #three-container {
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 580px; /* 720 - UI_HEIGHT(140) */
+      width: 1280px;
+      height: 720px;
       z-index: 1;
     }
-    /* Phaser 2D 层 - UI叠加在3D之上 */
+    #three-container canvas {
+      display: block;
+      width: 1280px !important;
+      height: 720px !important;
+    }
+    /* Phaser 2D 层 - 叠加在3D之上 */
     #game-container {
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
+      width: 1280px;
+      height: 720px;
       z-index: 2;
     }
     #game-container canvas {
       display: block;
     }
-    /* 视图切换提示 */
     #view-toggle {
       position: absolute;
       top: 5px;

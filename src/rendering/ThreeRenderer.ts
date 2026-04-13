@@ -36,8 +36,12 @@ export class ThreeRenderer {
     this.scene.background = new THREE.Color(0x1a2a0e);
     this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.005);
 
+    // 固定渲染尺寸
+    const renderW = GAME_WIDTH;
+    const renderH = GAME_HEIGHT;
+
     // Camera - 魔兽3 经典 45° 俯视
-    const aspect = GAME_WIDTH / MAP_H;
+    const aspect = renderW / renderH;
     const frustumSize = 20;
     this.camera = new THREE.OrthographicCamera(
       -frustumSize * aspect / 2, frustumSize * aspect / 2,
@@ -46,31 +50,28 @@ export class ThreeRenderer {
     this.camera.position.set(12, 22, 12);
     this.camera.lookAt(0, 0, 0);
 
-    // Renderer
+    // Renderer - 使用固定尺寸
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
+    this.renderer.setSize(renderW, renderH);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
     container.appendChild(this.renderer.domElement);
-    this.renderer.domElement.style.position = 'absolute';
-    this.renderer.domElement.style.top = '0';
-    this.renderer.domElement.style.left = '0';
 
     // 后处理
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
     const bloom = new UnrealBloomPass(
-      new THREE.Vector2(container.clientWidth, container.clientHeight),
+      new THREE.Vector2(renderW, renderH),
       0.35, 0.4, 0.85,
     );
     this.composer.addPass(bloom);
 
     const fxaa = new FXAAPass();
-    fxaa.uniforms['resolution'].value.set(1 / container.clientWidth, 1 / container.clientHeight);
+    fxaa.uniforms['resolution'].value.set(1 / renderW, 1 / renderH);
     this.composer.addPass(fxaa);
 
     this.setupLights();
@@ -145,7 +146,7 @@ export class ThreeRenderer {
     this.camera.position.set(this.cameraTarget.x + d * 0.55, d, this.cameraTarget.z + d * 0.55);
     this.camera.lookAt(this.cameraTarget);
     const frustumSize = 20 / this.cameraZoom;
-    const aspect = GAME_WIDTH / MAP_H;
+    const aspect = GAME_WIDTH / GAME_HEIGHT;
     this.camera.left = -frustumSize * aspect / 2;
     this.camera.right = frustumSize * aspect / 2;
     this.camera.top = frustumSize / 2;

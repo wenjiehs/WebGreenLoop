@@ -1,18 +1,21 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../utils/constants';
 
-// 2D→3D 坐标缩放因子
 const SCALE = 0.05;
 const UI_HEIGHT_3D = 140;
 
 /**
- * Three.js 渲染器 - 管理 Scene/Camera/Renderer/Light
+ * Three.js 渲染器 - Scene/Camera/Lights/PostProcessing
  */
 export class ThreeRenderer {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
-  private animationId: number = 0;
+  private composer: EffectComposer;
+  private bloomPass: UnrealBloomPass;
 
   // 摄像机控制
   private cameraTarget = new THREE.Vector3(0, 0, 0);
@@ -20,13 +23,16 @@ export class ThreeRenderer {
   private isDragging = false;
   private lastMouse = { x: 0, y: 0 };
 
+  // 时间
+  private clock = new THREE.Clock();
+
   constructor(container: HTMLElement) {
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1a2a0e);
-    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.008);
+    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.006);
 
-    // Camera - 魔兽3风格 45° 俯视
+    // Camera - 45° 俯视
     const aspect = GAME_WIDTH / (GAME_HEIGHT - UI_HEIGHT_3D);
     const frustumSize = 22;
     this.camera = new THREE.OrthographicCamera(
@@ -34,22 +40,33 @@ export class ThreeRenderer {
       frustumSize / 2, -frustumSize / 2,
       0.1, 200,
     );
-    // 45° 俯视角
     this.camera.position.set(15, 25, 15);
     this.camera.lookAt(0, 0, 0);
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setSize(container.clientWidth, container.clientHeight - 0);
+    this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.3;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.position = 'absolute';
     this.renderer.domElement.style.top = '0';
     this.renderer.domElement.style.left = '0';
+
+    // 后处理 - Bloom
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+
+    this.bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(container.clientWidth, container.clientHeight),
+      0.4,   // strength
+      0.3,   // radius
+      0.85,  // threshold
+    );
+    this.composer.addPass(this.bloomPass);
 
     this.setupLights();
     this.setupCameraControls(this.renderer.domElement);
@@ -57,7 +74,7 @@ export class ThreeRenderer {
 
   private setupLights(): void {
     // 太阳光（暖色，带阴影）
-    const sunLight = new THREE.DirectionalLight(0xFFEECC, 1.8);
+    const sunLight = new THREE.DirectionalLight(0xFFEECC, 2.0);
     sunLight.position.set(20, 30, 10);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.set(2048, 2048);
@@ -71,16 +88,18 @@ export class ThreeRenderer {
     this.scene.add(sunLight);
 
     // 环境光
-    const ambient = new THREE.AmbientLight(0x445566, 0.6);
-    this.scene.add(ambient);
+    this.scene.add(new THREE.AmbientLight(0x445566, 0.5));
 
-    // 半球光（天蓝+地绿）
-    const hemi = new THREE.HemisphereLight(0x88BBEE, 0x445522, 0.4);
-    this.scene.add(hemi);
+    // 半球光
+    this.scene.add(new THREE.HemisphereLight(0x88BBEE, 0x445522, 0.4));
+
+    // 微弱补光（填补阴影暗部）
+    const fillLight = new THREE.DirectionalLight(0x8888CC, 0.3);
+    fillLight.position.set(-10, 15, -10);
+    this.scene.add(fillLight);
   }
 
   private setupCameraControls(canvas: HTMLElement): void {
-    // 右键拖拽
     canvas.addEventListener('contextmenu', e => e.preventDefault());
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 2) { this.isDragging = true; this.lastMouse = { x: e.clientX, y: e.clientY }; }
@@ -95,8 +114,6 @@ export class ThreeRenderer {
       this.updateCameraPosition();
     });
     canvas.addEventListener('mouseup', () => { this.isDragging = false; });
-
-    // 滚轮缩放
     canvas.addEventListener('wheel', (e) => {
       this.cameraZoom = Math.max(0.5, Math.min(2.5, this.cameraZoom + e.deltaY * 0.001));
       this.updateCameraPosition();
@@ -105,11 +122,7 @@ export class ThreeRenderer {
 
   private updateCameraPosition(): void {
     const d = 25 / this.cameraZoom;
-    this.camera.position.set(
-      this.cameraTarget.x + d * 0.6,
-      d,
-      this.cameraTarget.z + d * 0.6,
-    );
+    this.camera.position.set(this.cameraTarget.x + d * 0.6, d, this.cameraTarget.z + d * 0.6);
     this.camera.lookAt(this.cameraTarget);
     const frustumSize = 22 / this.cameraZoom;
     const aspect = GAME_WIDTH / (GAME_HEIGHT - UI_HEIGHT_3D);
@@ -121,20 +134,21 @@ export class ThreeRenderer {
   }
 
   render(): void {
-    this.renderer.render(this.scene, this.camera);
+    this.composer.render();
   }
+
+  getTime(): number { return this.clock.getElapsedTime(); }
 
   resize(w: number, h: number): void {
     this.renderer.setSize(w, h);
+    this.composer.setSize(w, h);
     this.updateCameraPosition();
   }
 
   dispose(): void {
-    cancelAnimationFrame(this.animationId);
     this.renderer.dispose();
   }
 
-  // 2D Phaser 坐标 → 3D 世界坐标
   static toWorld(px: number, py: number, elevation: number = 0): THREE.Vector3 {
     return new THREE.Vector3(
       (px - GAME_WIDTH / 2) * SCALE,

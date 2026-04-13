@@ -1167,6 +1167,12 @@ export class GameScene extends Phaser.Scene {
       ring.setStrokeStyle(1, 0xFFAA00, 0.4);
       this.tweens.add({ targets: ring, alpha: 0, scale: 1.3, duration: 300, onComplete: () => ring.destroy() });
 
+      // 3D 爆炸
+      const bridge = (window as any).__gameBridge;
+      if (bridge?.effects && (window as any).__3dEnabled) {
+        bridge.effects.spawnExplosion(x, y, splash);
+      }
+
       for (const enemy of this.enemies) {
         if (enemy.isDying() || !enemy.active) continue;
         const dist = distanceBetween(x, y, enemy.x, enemy.y);
@@ -1224,15 +1230,20 @@ export class GameScene extends Phaser.Scene {
 
   private applySpecialEffect(enemy: Enemy, special: string | undefined, baseDamage: number): void {
     if (!special) return;
+    const bridge = (window as any).__gameBridge;
+    const is3D = (window as any).__3dEnabled;
+
     switch (special) {
       case 'slow':
         enemy.applySlow(0.3, 2000);
         break;
       case 'freeze_aura':
         enemy.applySlow(0.5, 1500);
+        if (bridge?.effects && is3D) bridge.effects.spawnFreezeEffect(enemy.x, enemy.y, 40);
         break;
       case 'poison':
         enemy.applyPoison(Math.floor(baseDamage * 0.5), 4000);
+        if (bridge?.effects && is3D) bridge.effects.spawnPoisonCloud(enemy.x, enemy.y);
         break;
       case 'chain':
         this.chainLightning(enemy, baseDamage * 0.6, 3);
@@ -1304,6 +1315,12 @@ export class GameScene extends Phaser.Scene {
         const spark = this.add.circle(ex, ey, 6, 0xFFFF88, 0.7).setDepth(18);
         this.tweens.add({ targets: spark, scale: 0, alpha: 0, duration: 150, onComplete: () => spark.destroy() });
 
+        // 3D 闪电
+        const bridgeLn = (window as any).__gameBridge;
+        if (bridgeLn?.effects && (window as any).__3dEnabled) {
+          bridgeLn.effects.spawnLightning(sx, sy, ex, ey);
+        }
+
         this.time.delayedCall(150, () => { glowGfx.destroy(); coreGfx.destroy(); });
 
         current = nearest;
@@ -1346,6 +1363,11 @@ export class GameScene extends Phaser.Scene {
     if (isBoss) {
       soundManager.playBossDeath();
       this.spawnBossDeathEffect(enemy.x, enemy.y);
+      // 3D Boss 爆炸
+      const bridge3d = (window as any).__gameBridge;
+      if (bridge3d?.effects && (window as any).__3dEnabled) {
+        bridge3d.effects.spawnBossExplosion(enemy.x, enemy.y);
+      }
     } else {
       soundManager.playEnemyDeath();
     }

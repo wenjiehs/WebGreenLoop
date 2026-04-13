@@ -3,6 +3,7 @@ import { ThreeRenderer } from './ThreeRenderer';
 import { TerrainBuilder } from './TerrainBuilder';
 import { TowerModelFactory } from './TowerModelFactory';
 import { EnemyModelFactory } from './EnemyModelFactory';
+import { EffectsSystem } from './EffectsSystem';
 import { Tower } from '../entities/Tower';
 import { Enemy } from '../entities/Enemy';
 import { HeroTower } from '../entities/HeroTower';
@@ -37,6 +38,7 @@ export class GameBridge {
   private projectiles: ProjectileSync[] = [];
   private heroSync: { hero: HeroTower; model: THREE.Group } | null = null;
   private terrainBuilt = false;
+  effects: EffectsSystem;
 
   // 缓存
   private towerGroup: THREE.Group;
@@ -46,6 +48,7 @@ export class GameBridge {
 
   constructor(renderer: ThreeRenderer) {
     this.renderer = renderer;
+    this.effects = new EffectsSystem(renderer);
     this.towerGroup = new THREE.Group();
     this.enemyGroup = new THREE.Group();
     this.projectileGroup = new THREE.Group();
@@ -87,6 +90,7 @@ export class GameBridge {
     this.syncEnemies(enemies, time);
     this.syncHero(heroTower);
     this.cleanupProjectiles();
+    this.effects.update();
     this.renderer.render();
   }
 

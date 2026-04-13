@@ -2,30 +2,36 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../utils/constants';
 
 const SCALE = 0.05;
 const UI_HEIGHT_3D = 140;
-const MAP_H = GAME_HEIGHT - UI_HEIGHT_3D;
+const MAP_H = GAME_HEIGHT - UI_HEIGHT_3D; // 580
+
+// 3D 世界尺寸
+const WORLD_W = GAME_WIDTH * SCALE;   // 64
+const WORLD_H = MAP_H * SCALE;        // 29
 
 /**
- * Three.js 渲染器 - Scene/Camera/Lights/PostProcessing/Camera Controls
+ * Three.js 渲染器
+ * 关键数学：
+ * - Phaser 地图区域: 1280 x 580 像素
+ * - 3D 世界: 64 x 29 世界单位 (SCALE=0.05)
+ * - 摄像机 frustum 必须 >= 64 宽才能看到整个地图
  */
 export class ThreeRenderer {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
   private composer: EffectComposer;
-  sunLight!: THREE.DirectionalLight;
 
   // 摄像机
   private cameraTarget = new THREE.Vector3(0, 0, 0);
   private cameraZoom = 1;
+  private targetZoom = 1;
   private isDragging = false;
   private lastMouse = { x: 0, y: 0 };
-  private targetZoom = 1;
+  private baseFrustum = WORLD_W * 1.15; // 比地图宽一点留边距
 
   // 时间
   private clock = new THREE.Clock();
@@ -34,24 +40,24 @@ export class ThreeRenderer {
   constructor(container: HTMLElement) {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1a2a0e);
-    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.005);
+    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.003);
 
-    // 固定渲染尺寸
     const renderW = GAME_WIDTH;
     const renderH = GAME_HEIGHT;
-
-    // Camera - 魔兽3 经典 45° 俯视
     const aspect = renderW / renderH;
-    const frustumSize = 20;
+
+    // Camera — frustum 基于世界实际大小
     this.camera = new THREE.OrthographicCamera(
-      -frustumSize * aspect / 2, frustumSize * aspect / 2,
-      frustumSize / 2, -frustumSize / 2, 0.1, 200,
+      -this.baseFrustum * aspect / 2, this.baseFrustum * aspect / 2,
+      this.baseFrustum / 2, -this.baseFrustum / 2,
+      0.1, 500,
     );
-    this.camera.position.set(12, 22, 12);
+    // 正 45° 俯视 — 位置够远以覆盖全图
+    this.camera.position.set(40, 60, 40);
     this.camera.lookAt(0, 0, 0);
 
-    // Renderer - 使用固定尺寸
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    // Renderer
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(renderW, renderH);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -60,50 +66,37 @@ export class ThreeRenderer {
     this.renderer.toneMappingExposure = 1.2;
     container.appendChild(this.renderer.domElement);
 
-    // 后处理
+    // 后处理 — 只用 Bloom，跳过 FXAA（兼容性问题）
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(renderW, renderH),
-      0.35, 0.4, 0.85,
-    );
-    this.composer.addPass(bloom);
-
-    const fxaa = new FXAAPass();
-    fxaa.uniforms['resolution'].value.set(1 / renderW, 1 / renderH);
-    this.composer.addPass(fxaa);
+    this.composer.addPass(new UnrealBloomPass(
+      new THREE.Vector2(renderW, renderH), 0.3, 0.4, 0.9,
+    ));
 
     this.setupLights();
     this.setupCameraControls(this.renderer.domElement);
   }
 
   private setupLights(): void {
-    // 太阳光
-    this.sunLight = new THREE.DirectionalLight(0xFFEECC, 2.2);
-    this.sunLight.position.set(20, 35, 15);
-    this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(2048, 2048);
-    this.sunLight.shadow.camera.near = 0.5;
-    this.sunLight.shadow.camera.far = 100;
-    this.sunLight.shadow.camera.left = -35;
-    this.sunLight.shadow.camera.right = 35;
-    this.sunLight.shadow.camera.top = 35;
-    this.sunLight.shadow.camera.bottom = -35;
-    this.sunLight.shadow.bias = -0.0003;
-    this.scene.add(this.sunLight);
+    // 太阳光 — 位置要覆盖整个世界
+    const sun = new THREE.DirectionalLight(0xFFEECC, 2.0);
+    sun.position.set(30, 50, 20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const shadowCam = sun.shadow.camera;
+    shadowCam.near = 0.5; shadowCam.far = 150;
+    shadowCam.left = -50; shadowCam.right = 50;
+    shadowCam.top = 50; shadowCam.bottom = -50;
+    sun.shadow.bias = -0.0003;
+    this.scene.add(sun);
 
-    this.scene.add(new THREE.AmbientLight(0x445566, 0.5));
-    this.scene.add(new THREE.HemisphereLight(0x88BBEE, 0x445522, 0.35));
+    this.scene.add(new THREE.AmbientLight(0x556677, 0.6));
+    this.scene.add(new THREE.HemisphereLight(0x88BBEE, 0x445522, 0.4));
 
-    const fill = new THREE.DirectionalLight(0x8888CC, 0.25);
-    fill.position.set(-15, 20, -10);
+    // 补光
+    const fill = new THREE.DirectionalLight(0x8888CC, 0.2);
+    fill.position.set(-20, 30, -15);
     this.scene.add(fill);
-
-    // 地面微弱点光（暖色氛围）
-    const warm = new THREE.PointLight(0xFF8844, 0.15, 30);
-    warm.position.set(0, 3, 0);
-    this.scene.add(warm);
   }
 
   private setupCameraControls(canvas: HTMLElement): void {
@@ -113,19 +106,17 @@ export class ThreeRenderer {
     });
     canvas.addEventListener('mousemove', (e) => {
       if (!this.isDragging) return;
-      const dx = (e.clientX - this.lastMouse.x) * 0.04 / this.cameraZoom;
-      const dy = (e.clientY - this.lastMouse.y) * 0.04 / this.cameraZoom;
-      this.cameraTarget.x -= dx;
-      this.cameraTarget.z -= dy;
+      const speed = 0.08 / this.cameraZoom;
+      this.cameraTarget.x -= (e.clientX - this.lastMouse.x) * speed;
+      this.cameraTarget.z -= (e.clientY - this.lastMouse.y) * speed;
       this.lastMouse = { x: e.clientX, y: e.clientY };
     });
     window.addEventListener('mouseup', () => { this.isDragging = false; });
     canvas.addEventListener('wheel', (e) => {
-      this.targetZoom = Math.max(0.4, Math.min(3.0, this.targetZoom + e.deltaY * 0.0015));
+      this.targetZoom = Math.max(0.5, Math.min(3.0, this.targetZoom + e.deltaY * 0.001));
     });
   }
 
-  /** 聚焦到 Phaser 坐标 */
   focusOn(px: number, py: number): void {
     const pos = ThreeRenderer.toWorld(px, py, 0);
     this.cameraTarget.set(pos.x, 0, pos.z);
@@ -133,36 +124,33 @@ export class ThreeRenderer {
 
   render(): void {
     this.elapsed = this.clock.getElapsedTime();
-
-    // 平滑缩放
     this.cameraZoom += (this.targetZoom - this.cameraZoom) * 0.1;
-    this.updateCameraPosition();
-
+    this.updateCamera();
     this.composer.render();
   }
 
-  private updateCameraPosition(): void {
-    const d = 22 / this.cameraZoom;
-    this.camera.position.set(this.cameraTarget.x + d * 0.55, d, this.cameraTarget.z + d * 0.55);
-    this.camera.lookAt(this.cameraTarget);
-    const frustumSize = 20 / this.cameraZoom;
+  private updateCamera(): void {
+    const frustum = this.baseFrustum / this.cameraZoom;
     const aspect = GAME_WIDTH / GAME_HEIGHT;
-    this.camera.left = -frustumSize * aspect / 2;
-    this.camera.right = frustumSize * aspect / 2;
-    this.camera.top = frustumSize / 2;
-    this.camera.bottom = -frustumSize / 2;
+    this.camera.left = -frustum * aspect / 2;
+    this.camera.right = frustum * aspect / 2;
+    this.camera.top = frustum / 2;
+    this.camera.bottom = -frustum / 2;
+
+    const d = 60 / this.cameraZoom;
+    this.camera.position.set(
+      this.cameraTarget.x + d * 0.5,
+      d,
+      this.cameraTarget.z + d * 0.5,
+    );
+    this.camera.lookAt(this.cameraTarget);
     this.camera.updateProjectionMatrix();
   }
 
   getTime(): number { return this.elapsed; }
-
-  resize(w: number, h: number): void {
-    this.renderer.setSize(w, h);
-    this.composer.setSize(w, h);
-  }
-
   dispose(): void { this.renderer.dispose(); }
 
+  /** Phaser 像素坐标 → 3D 世界坐标 */
   static toWorld(px: number, py: number, elevation: number = 0): THREE.Vector3 {
     return new THREE.Vector3(
       (px - GAME_WIDTH / 2) * SCALE,

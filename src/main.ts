@@ -29,12 +29,11 @@ document.addEventListener('keydown', (e) => {
 
 // Phaser 2D 游戏逻辑层
 const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
+  type: Phaser.CANVAS, // CANVAS 模式才能可靠透明
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   parent: 'game-container',
-  backgroundColor: '#1a1a2e',
-  transparent: true, // 透明背景，让3D层可见
+  transparent: true,
   scene: [BootScene, MainMenuScene, GameScene, GameOverScene],
   physics: {
     default: 'arcade',
@@ -45,10 +44,6 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-  },
-  render: {
-    antialias: true,
-    pixelArt: false,
   },
 };
 

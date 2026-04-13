@@ -137,6 +137,13 @@ export class GameScene extends Phaser.Scene {
     this.createUI();
     this.setupInput();
 
+    // 3D 渲染层接入
+    const bridge = (window as any).__gameBridge;
+    if (bridge) {
+      bridge.reset();
+      bridge.buildTerrain(this.pathManager);
+    }
+
     this.economyManager.onGoldChange = () => {
       this.updateResourceUI();
       this.updateShopAffordability();
@@ -1929,6 +1936,12 @@ export class GameScene extends Phaser.Scene {
     // 如果英雄塔被选中，实时更新面板
     if (this.heroTower?.active && this.infoPanel.visible && !this.selectedTower) {
       this.showHeroTowerInfo();
+    }
+
+    // 3D 渲染同步
+    const bridge = (window as any).__gameBridge;
+    if (bridge && (window as any).__3dEnabled) {
+      bridge.sync(this.towers, this.enemies, this.heroTower, time);
     }
   }
 }

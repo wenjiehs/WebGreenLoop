@@ -7,7 +7,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #1a1a2e;
+      background: #0a0a12;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -15,16 +15,50 @@
       overflow: hidden;
       font-family: 'Microsoft YaHei', sans-serif;
     }
-    #game-container {
+    #app-container {
       position: relative;
+      width: 1280px;
+      height: 720px;
     }
-    canvas {
+    /* 3D 渲染层 */
+    #three-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 580px; /* 720 - UI_HEIGHT(140) */
+      z-index: 1;
+    }
+    /* Phaser 2D 层 - UI叠加在3D之上 */
+    #game-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+    #game-container canvas {
       display: block;
+    }
+    /* 视图切换提示 */
+    #view-toggle {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      z-index: 100;
+      color: #888;
+      font-size: 10px;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
-  <div id="game-container"></div>
+  <div id="app-container">
+    <div id="three-container"></div>
+    <div id="game-container"></div>
+    <div id="view-toggle">V键切换2D/3D</div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

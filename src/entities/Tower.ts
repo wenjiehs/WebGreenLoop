@@ -306,10 +306,14 @@ export class Tower extends Phaser.GameObjects.Container {
     }
 
     // 更新弹道移动
+    const is3D = (window as any).__3dEnabled;
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
       if (proj.active) {
         proj.update(_time, delta);
+        // 3D 模式下隐藏 2D 弹道
+        if (is3D) proj.setAlpha(0);
+        else proj.setAlpha(1);
       } else {
         this.projectiles.splice(i, 1);
       }
@@ -366,6 +370,11 @@ export class Tower extends Phaser.GameObjects.Container {
       const pulse = this.scene.add.circle(this.x, this.y, this.currentSplash, 0x66CCFF, 0.12).setDepth(4);
       this.scene.tweens.add({ targets: pulse, alpha: 0, scale: 1.2, duration: 400, onComplete: () => pulse.destroy() });
       this.onProjectileHit?.(this.x, this.y, this.currentDamage + this.auraDamageBonus, this.currentSplash, this.config.attackType.toString(), 'freeze_aura');
+      // 3D 冰冻
+      const bridgeIce = (window as any).__gameBridge;
+      if (bridgeIce?.effects && (window as any).__3dEnabled) {
+        bridgeIce.effects.spawnFreezeEffect(this.x, this.y, this.currentSplash);
+      }
       return;
     }
 
@@ -454,6 +463,12 @@ export class Tower extends Phaser.GameObjects.Container {
       };
       this.projectiles.push(mainProj);
 
+      // 3D 主弹道
+      const bridgeBounce = (window as any).__gameBridge;
+      if (bridgeBounce && (window as any).__3dEnabled) {
+        bridgeBounce.spawnProjectile(this.x, this.y, target.x, target.y, projColor, false);
+      }
+
       // 弹射弹道（延迟发射）
       for (let i = 1; i < bounceTargets.length; i++) {
         const from = bounceTargets[i - 1];
@@ -466,6 +481,11 @@ export class Tower extends Phaser.GameObjects.Container {
             this.onProjectileHit?.(hx, hy, dmg, sp, this.config.attackType.toString(), undefined);
           };
           this.projectiles.push(bp);
+          // 3D 弹射弹道
+          const bb = (window as any).__gameBridge;
+          if (bb && (window as any).__3dEnabled) {
+            bb.spawnProjectile(from.x, from.y, to.x, to.y, 0xAACC44, false);
+          }
         });
       }
       return;
@@ -482,6 +502,12 @@ export class Tower extends Phaser.GameObjects.Container {
     };
 
     this.projectiles.push(proj);
+
+    // 3D 弹道
+    const bridge = (window as any).__gameBridge;
+    if (bridge && (window as any).__3dEnabled) {
+      bridge.spawnProjectile(this.x, this.y, target.x, target.y, projColor, this.currentSplash > 0);
+    }
   }
 
   destroy(fromScene?: boolean): void {

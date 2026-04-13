@@ -17,6 +17,11 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(data: GameOverData): void {
+    // 结算场景隐藏3D层，清理3D数据
+    (window as any).__hide3DLayer?.();
+    const bridge = (window as any).__gameBridge;
+    if (bridge) bridge.reset();
+
     this.cameras.main.setBackgroundColor('#0d0d1a');
 
     const isVictory = data.victory;

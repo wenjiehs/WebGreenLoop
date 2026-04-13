@@ -29,8 +29,6 @@ export class ThreeRenderer {
   private cameraTarget = new THREE.Vector3(0, 0, 0);
   private cameraZoom = 1;
   private targetZoom = 1;
-  private isDragging = false;
-  private lastMouse = { x: 0, y: 0 };
   private baseFrustum = WORLD_W * 1.15; // 比地图宽一点留边距
 
   // 时间
@@ -99,22 +97,20 @@ export class ThreeRenderer {
     this.scene.add(fill);
   }
 
-  private setupCameraControls(canvas: HTMLElement): void {
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
-    canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 2) { this.isDragging = true; this.lastMouse = { x: e.clientX, y: e.clientY }; }
-    });
-    canvas.addEventListener('mousemove', (e) => {
-      if (!this.isDragging) return;
-      const speed = 0.08 / this.cameraZoom;
-      this.cameraTarget.x -= (e.clientX - this.lastMouse.x) * speed;
-      this.cameraTarget.z -= (e.clientY - this.lastMouse.y) * speed;
-      this.lastMouse = { x: e.clientX, y: e.clientY };
-    });
-    window.addEventListener('mouseup', () => { this.isDragging = false; });
-    canvas.addEventListener('wheel', (e) => {
-      this.targetZoom = Math.max(0.5, Math.min(3.0, this.targetZoom + e.deltaY * 0.001));
-    });
+  private setupCameraControls(_canvas: HTMLElement): void {
+    // 事件由 main.ts 统一转发，不再直接监听 canvas
+  }
+
+  /** 由 main.ts 事件转发调用 — 拖拽3D摄像机 */
+  handleDrag(dx: number, dy: number): void {
+    const speed = 0.08 / this.cameraZoom;
+    this.cameraTarget.x -= dx * speed;
+    this.cameraTarget.z -= dy * speed;
+  }
+
+  /** 由 main.ts 事件转发调用 — 缩放3D摄像机 */
+  handleZoom(deltaY: number): void {
+    this.targetZoom = Math.max(0.5, Math.min(3.0, this.targetZoom + deltaY * 0.001));
   }
 
   focusOn(px: number, py: number): void {

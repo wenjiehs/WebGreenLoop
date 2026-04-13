@@ -20,7 +20,7 @@
       width: 1280px;
       height: 720px;
     }
-    /* 3D 渲染层 - 固定尺寸覆盖整个游戏区 */
+    /* 3D 渲染层 */
     #three-container {
       position: absolute;
       top: 0;
@@ -28,13 +28,15 @@
       width: 1280px;
       height: 720px;
       z-index: 1;
+      pointer-events: none; /* 3D层不接收事件，由JS转发 */
     }
     #three-container canvas {
       display: block;
       width: 1280px !important;
       height: 720px !important;
+      pointer-events: none;
     }
-    /* Phaser 2D 层 - 叠加在3D之上 */
+    /* Phaser 2D 层 - 所有鼠标事件都走这里 */
     #game-container {
       position: absolute;
       top: 0;
@@ -46,7 +48,6 @@
     }
     #game-container canvas {
       display: block;
-      pointer-events: auto;
     }
     #view-toggle {
       position: absolute;
@@ -63,7 +64,7 @@
   <div id="app-container">
     <div id="three-container"></div>
     <div id="game-container"></div>
-    <div id="view-toggle">V键切换2D/3D</div>
+    <div id="view-toggle">V键切换2D/3D [3D]</div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -138,6 +138,7 @@ export class GameScene extends Phaser.Scene {
     this.setupInput();
 
     // 3D 渲染层接入
+    (window as any).__show3DLayer?.();
     const bridge = (window as any).__gameBridge;
     if (bridge) {
       bridge.reset();
@@ -899,6 +900,11 @@ export class GameScene extends Phaser.Scene {
         this.heroTower.select();
         this.selectedTower = null;
         this.showHeroTowerInfo();
+        // 3D 选中
+        const bridge3dHero = (window as any).__gameBridge;
+        if (bridge3dHero && (window as any).__3dEnabled) {
+          bridge3dHero.showSelection(this.heroTower.x, this.heroTower.y, this.heroTower.getRange());
+        }
         return;
       }
 
@@ -983,6 +989,12 @@ export class GameScene extends Phaser.Scene {
     this.selectedTower = tower;
     tower.select();
     this.showTowerInfo(tower);
+
+    // 3D 选中高亮
+    const bridge = (window as any).__gameBridge;
+    if (bridge && (window as any).__3dEnabled) {
+      bridge.showSelection(tower.x, tower.y, tower.getRange());
+    }
   }
 
   private highlightShopButton(index: number): void {
@@ -1049,6 +1061,12 @@ export class GameScene extends Phaser.Scene {
         this.rangePreview.setDepth(3);
       }
       this.rangePreview.setPosition(x, y);
+
+      // 3D 建造预览
+      const bridge = (window as any).__gameBridge;
+      if (bridge && (window as any).__3dEnabled) {
+        bridge.showBuildPreview(x, y, this.selectedTowerConfig);
+      }
     }
   }
 
@@ -1126,6 +1144,12 @@ export class GameScene extends Phaser.Scene {
     soundManager.playBuild();
     this.showMessage(`✅ ${this.heroTower.getConfig().name} 已移动`);
     this.showHeroTowerInfo();
+    // 3D 移动闪光
+    const bridgeMove = (window as any).__gameBridge;
+    if (bridgeMove?.effects && (window as any).__3dEnabled) {
+      const { x: px, y: py } = this.gridManager.gridToPixel(col, row);
+      bridgeMove.effects.spawnExplosion(px, py, 15);
+    }
   }
 
   private spawnBuildEffect(col: number, row: number): void {
@@ -1671,6 +1695,16 @@ export class GameScene extends Phaser.Scene {
       duration: 400,
       onComplete: () => flash.destroy(),
     });
+
+    // 3D 升级效果（Bridge.syncTowers 会自动检测 level 变化重建模型）
+    const bridgeUpg = (window as any).__gameBridge;
+    if (bridgeUpg?.effects && (window as any).__3dEnabled) {
+      bridgeUpg.effects.spawnExplosion(tower.x, tower.y, 20);
+    }
+    // 3D 选中更新
+    if (bridgeUpg && (window as any).__3dEnabled) {
+      bridgeUpg.showSelection(tower.x, tower.y, tower.getRange());
+    }
   }
 
   private sellTower(tower: Tower): void {
@@ -1974,11 +2008,10 @@ export class GameScene extends Phaser.Scene {
     const is3D = (window as any).__3dEnabled;
     if (bridge && is3D) {
       bridge.sync(this.towers, this.enemies, this.heroTower, time);
-      // 3D 模式下让 Phaser 2D 实体半透明
-      const entityAlpha = 0.15;
-      for (const tower of this.towers) { if (tower.active) tower.setAlpha(entityAlpha); }
-      for (const enemy of this.enemies) { if (enemy.active) enemy.setAlpha(entityAlpha); }
-      if (this.heroTower?.active) this.heroTower.setAlpha(entityAlpha);
+      // 3D 模式下完全隐藏 Phaser 2D 实体（3D 层负责渲染）
+      for (const tower of this.towers) { if (tower.active) tower.setAlpha(0); }
+      for (const enemy of this.enemies) { if (enemy.active) enemy.setAlpha(0); }
+      if (this.heroTower?.active) this.heroTower.setAlpha(0);
     } else {
       // 2D 模式恢复不透明
       for (const tower of this.towers) { if (tower.active) tower.setAlpha(1); }

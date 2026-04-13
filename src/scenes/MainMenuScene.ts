@@ -19,6 +19,9 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    // 菜单场景隐藏3D层
+    (window as any).__hide3DLayer?.();
+
     this.cameras.main.setBackgroundColor('#0d0d1a');
     soundManager.startMenuBGM();
 

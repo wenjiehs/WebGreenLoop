@@ -327,75 +327,70 @@ export class GameScene extends Phaser.Scene {
 
   private drawMap(): void {
     const mapHeight = GAME_HEIGHT - UI_HEIGHT;
+    const is3D = (window as any).__3dEnabled;
 
-    // 背景草地
-    this.add.rectangle(GAME_WIDTH / 2, mapHeight / 2, GAME_WIDTH, mapHeight, COLORS.GRASS);
+    if (!is3D) {
+      // 2D 模式：绘制不透明地图
+      this.add.rectangle(GAME_WIDTH / 2, mapHeight / 2, GAME_WIDTH, mapHeight, COLORS.GRASS);
 
-    // 草地纹理 - 多层点缀
-    const grassGfx = this.add.graphics();
-    // 大块深色草斑
-    for (let i = 0; i < 60; i++) {
-      const gx = Phaser.Math.Between(0, GAME_WIDTH);
-      const gy = Phaser.Math.Between(0, mapHeight);
-      grassGfx.fillStyle(0x1a4a1a, 0.2);
-      grassGfx.fillCircle(gx, gy, Phaser.Math.Between(4, 10));
-    }
-    // 小草尖
-    for (let i = 0; i < 300; i++) {
-      const gx = Phaser.Math.Between(0, GAME_WIDTH);
-      const gy = Phaser.Math.Between(0, mapHeight);
-      const shade = Phaser.Math.Between(0x20, 0x50);
-      grassGfx.fillStyle(Phaser.Display.Color.GetColor(shade, 70 + Phaser.Math.Between(0, 40), shade), 0.25);
-      grassGfx.fillCircle(gx, gy, Phaser.Math.Between(1, 2));
-    }
-
-    // 绘制路径 - 石砖纹理
-    const pathTiles = this.pathManager.getPathTiles();
-    pathTiles.forEach((key) => {
-      const [col, row] = key.split(',').map(Number);
-      if (row * TILE_SIZE < mapHeight) {
-        const px = col * TILE_SIZE + TILE_SIZE / 2;
-        const py = row * TILE_SIZE + TILE_SIZE / 2;
-        // 路面底色
-        const rect = this.add.rectangle(px, py, TILE_SIZE, TILE_SIZE, COLORS.PATH);
-        rect.setStrokeStyle(0.5, COLORS.PATH_BORDER, 0.3);
-        // 石砖线
-        const brickGfx = this.add.graphics();
-        brickGfx.lineStyle(0.5, 0x000000, 0.08);
-        brickGfx.moveTo(px - TILE_SIZE / 2, py);
-        brickGfx.lineTo(px + TILE_SIZE / 2, py);
-        brickGfx.moveTo(px, py - TILE_SIZE / 2);
-        brickGfx.lineTo(px, py + TILE_SIZE / 2);
-        brickGfx.strokePath();
+      const grassGfx = this.add.graphics();
+      for (let i = 0; i < 60; i++) {
+        const gx = Phaser.Math.Between(0, GAME_WIDTH);
+        const gy = Phaser.Math.Between(0, mapHeight);
+        grassGfx.fillStyle(0x1a4a1a, 0.2);
+        grassGfx.fillCircle(gx, gy, Phaser.Math.Between(4, 10));
       }
-    });
+      for (let i = 0; i < 300; i++) {
+        const gx = Phaser.Math.Between(0, GAME_WIDTH);
+        const gy = Phaser.Math.Between(0, mapHeight);
+        const shade = Phaser.Math.Between(0x20, 0x50);
+        grassGfx.fillStyle(Phaser.Display.Color.GetColor(shade, 70 + Phaser.Math.Between(0, 40), shade), 0.25);
+        grassGfx.fillCircle(gx, gy, Phaser.Math.Between(1, 2));
+      }
 
-    // 出生点标记
-    const waypoints = this.pathManager.getWaypoints();
-    if (waypoints.length > 0) {
-      const spawn = waypoints[0];
-      this.add.circle(spawn.x, spawn.y, 10, 0xFF4444, 0.5).setDepth(2);
-      this.add.text(spawn.x, spawn.y - 18, '🚩 出生点', {
-        fontSize: '10px', fontFamily: 'Microsoft YaHei, sans-serif', color: '#FF8888',
-      }).setOrigin(0.5).setDepth(2);
-
-      // 路径方向箭头 - 在每条边的中点标注
-      const midPoints = [
-        { x: GAME_WIDTH / 2, y: waypoints[0].y, text: '→' },
-        { x: waypoints.find(w => w.x === waypoints[Math.floor(waypoints.length * 0.25)]?.x)?.x || GAME_WIDTH - 100, y: mapHeight / 2, text: '↓' },
-        { x: GAME_WIDTH / 2, y: waypoints.find(w => w.y > mapHeight / 2)?.y || mapHeight - 100, text: '←' },
-        { x: waypoints[0].x, y: mapHeight / 2, text: '↑' },
-      ];
-      midPoints.forEach(mp => {
-        this.add.text(mp.x, mp.y, mp.text, {
-          fontSize: '20px', color: '#FFFFFF', stroke: '#000000', strokeThickness: 2,
-        }).setOrigin(0.5).setDepth(2).setAlpha(0.4);
+      const pathTiles = this.pathManager.getPathTiles();
+      pathTiles.forEach((key) => {
+        const [col, row] = key.split(',').map(Number);
+        if (row * TILE_SIZE < mapHeight) {
+          const px = col * TILE_SIZE + TILE_SIZE / 2;
+          const py = row * TILE_SIZE + TILE_SIZE / 2;
+          const rect = this.add.rectangle(px, py, TILE_SIZE, TILE_SIZE, COLORS.PATH);
+          rect.setStrokeStyle(0.5, COLORS.PATH_BORDER, 0.3);
+          const brickGfx = this.add.graphics();
+          brickGfx.lineStyle(0.5, 0x000000, 0.08);
+          brickGfx.moveTo(px - TILE_SIZE / 2, py);
+          brickGfx.lineTo(px + TILE_SIZE / 2, py);
+          brickGfx.moveTo(px, py - TILE_SIZE / 2);
+          brickGfx.lineTo(px, py + TILE_SIZE / 2);
+          brickGfx.strokePath();
+        }
       });
+
+      const waypoints = this.pathManager.getWaypoints();
+      if (waypoints.length > 0) {
+        const spawn = waypoints[0];
+        this.add.circle(spawn.x, spawn.y, 10, 0xFF4444, 0.5).setDepth(2);
+        this.add.text(spawn.x, spawn.y - 18, '🚩 出生点', {
+          fontSize: '10px', fontFamily: 'Microsoft YaHei, sans-serif', color: '#FF8888',
+        }).setOrigin(0.5).setDepth(2);
+
+        const midPoints = [
+          { x: GAME_WIDTH / 2, y: waypoints[0].y, text: '→' },
+          { x: waypoints.find(w => w.x === waypoints[Math.floor(waypoints.length * 0.25)]?.x)?.x || GAME_WIDTH - 100, y: mapHeight / 2, text: '↓' },
+          { x: GAME_WIDTH / 2, y: waypoints.find(w => w.y > mapHeight / 2)?.y || mapHeight - 100, text: '←' },
+          { x: waypoints[0].x, y: mapHeight / 2, text: '↑' },
+        ];
+        midPoints.forEach(mp => {
+          this.add.text(mp.x, mp.y, mp.text, {
+            fontSize: '20px', color: '#FFFFFF', stroke: '#000000', strokeThickness: 2,
+          }).setOrigin(0.5).setDepth(2).setAlpha(0.4);
+        });
+      }
     }
 
-    // 网格线
+    // 网格线（两种模式都显示，3D 模式下更淡）
     const graphics = this.add.graphics();
-    graphics.lineStyle(0.5, COLORS.GRID_LINE, 0.1);
+    graphics.lineStyle(0.5, COLORS.GRID_LINE, is3D ? 0.04 : 0.1);
     const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
     const rows = Math.floor(mapHeight / TILE_SIZE);
     for (let col = 0; col <= cols; col++) {
@@ -1940,8 +1935,19 @@ export class GameScene extends Phaser.Scene {
 
     // 3D 渲染同步
     const bridge = (window as any).__gameBridge;
-    if (bridge && (window as any).__3dEnabled) {
+    const is3D = (window as any).__3dEnabled;
+    if (bridge && is3D) {
       bridge.sync(this.towers, this.enemies, this.heroTower, time);
+      // 3D 模式下让 Phaser 2D 实体半透明
+      const entityAlpha = 0.15;
+      for (const tower of this.towers) { if (tower.active) tower.setAlpha(entityAlpha); }
+      for (const enemy of this.enemies) { if (enemy.active) enemy.setAlpha(entityAlpha); }
+      if (this.heroTower?.active) this.heroTower.setAlpha(entityAlpha);
+    } else {
+      // 2D 模式恢复不透明
+      for (const tower of this.towers) { if (tower.active) tower.setAlpha(1); }
+      for (const enemy of this.enemies) { if (enemy.active) enemy.setAlpha(1); }
+      if (this.heroTower?.active) this.heroTower.setAlpha(1);
     }
   }
 }

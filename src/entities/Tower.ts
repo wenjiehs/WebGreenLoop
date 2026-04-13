@@ -50,9 +50,75 @@ export class Tower extends Phaser.GameObjects.Container {
     this.currentSplash = config.splash;
     this.totalInvested = config.cost;
 
-    // 塔底座
-    this.towerBody = scene.add.rectangle(0, 0, TILE_SIZE - 4, TILE_SIZE - 4, config.color);
-    this.towerBody.setStrokeStyle(1, 0x000000, 0.6);
+    const hs = (TILE_SIZE - 6) / 2; // half size
+    const gfx = scene.add.graphics();
+
+    // 不同类型不同底座形状
+    const cat = config.category;
+    const sp = config.special || '';
+
+    if (cat === 'support') {
+      // 辅助塔 - 菱形
+      gfx.fillStyle(config.color, 0.85);
+      gfx.fillPoints([
+        new Phaser.Geom.Point(0, -hs), new Phaser.Geom.Point(hs, 0),
+        new Phaser.Geom.Point(0, hs), new Phaser.Geom.Point(-hs, 0),
+      ], true);
+      gfx.lineStyle(1.5, 0xFFFFFF, 0.2);
+      gfx.strokePoints([
+        new Phaser.Geom.Point(0, -hs), new Phaser.Geom.Point(hs, 0),
+        new Phaser.Geom.Point(0, hs), new Phaser.Geom.Point(-hs, 0),
+      ], true);
+    } else if (cat === 'aoe' || sp === 'aoe') {
+      // AOE塔 - 八边形
+      gfx.fillStyle(config.color, 0.85);
+      const pts: Phaser.Geom.Point[] = [];
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 - Math.PI / 8;
+        pts.push(new Phaser.Geom.Point(Math.cos(a) * hs, Math.sin(a) * hs));
+      }
+      gfx.fillPoints(pts, true);
+      gfx.lineStyle(1, 0x000000, 0.4);
+      gfx.strokePoints(pts, true);
+    } else if (sp === 'execute' || sp === 'chaos') {
+      // 特殊塔 - 六角星
+      gfx.fillStyle(config.color, 0.85);
+      const pts: Phaser.Geom.Point[] = [];
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+        const r = i % 2 === 0 ? hs : hs * 0.55;
+        pts.push(new Phaser.Geom.Point(Math.cos(a) * r, Math.sin(a) * r));
+      }
+      gfx.fillPoints(pts, true);
+      gfx.lineStyle(1.5, 0xFF4444, 0.3);
+      gfx.strokePoints(pts, true);
+    } else if (cat === 'hero') {
+      // 英雄塔 - 圆形+十字
+      gfx.fillStyle(config.color, 0.85);
+      gfx.fillCircle(0, 0, hs);
+      gfx.lineStyle(1.5, 0xFFD700, 0.4);
+      gfx.strokeCircle(0, 0, hs);
+      gfx.lineStyle(1, 0xFFD700, 0.2);
+      gfx.moveTo(-hs * 0.5, 0); gfx.lineTo(hs * 0.5, 0);
+      gfx.moveTo(0, -hs * 0.5); gfx.lineTo(0, hs * 0.5);
+      gfx.strokePath();
+    } else if (cat === 'slow') {
+      // 减速塔 - 圆角方形
+      gfx.fillStyle(config.color, 0.85);
+      gfx.fillRoundedRect(-hs, -hs, hs * 2, hs * 2, 5);
+      gfx.lineStyle(1, 0x66CCFF, 0.3);
+      gfx.strokeRoundedRect(-hs, -hs, hs * 2, hs * 2, 5);
+    } else {
+      // 基础塔 - 普通方形
+      gfx.fillStyle(config.color, 0.85);
+      gfx.fillRect(-hs, -hs, hs * 2, hs * 2);
+      gfx.lineStyle(1, 0x000000, 0.4);
+      gfx.strokeRect(-hs, -hs, hs * 2, hs * 2);
+    }
+    this.add(gfx);
+
+    // 用一个透明矩形做选中框（不显示但保持API兼容）
+    this.towerBody = scene.add.rectangle(0, 0, TILE_SIZE - 4, TILE_SIZE - 4, 0x000000, 0);
     this.add(this.towerBody);
 
     // 塔类型图标
@@ -62,26 +128,36 @@ export class Tower extends Phaser.GameObjects.Container {
       'aura_speed': '⏩', 'antiair': '✈', 'chaos': '☯', 'hero_grow': '⭐',
       'execute': '💀', 'detect': '👁', 'chain': '⚡',
     };
-    const icon = iconMap[config.special || ''] || '';
+    const icon = iconMap[sp] || '';
     if (icon) {
-      const iconText = scene.add.text(0, -2, icon, { fontSize: '10px' }).setOrigin(0.5);
+      const iconText = scene.add.text(0, -3, icon, { fontSize: '10px' }).setOrigin(0.5);
       this.add(iconText);
     }
 
-    // 塔中心标记（攻击类型对应颜色）
-    this.towerTop = scene.add.circle(0, icon ? 5 : 0, 4, config.projectileColor);
+    // 炮口/中心点
+    this.towerTop = scene.add.circle(0, icon ? 5 : 0, 3, config.projectileColor);
+    this.towerTop.setStrokeStyle(0.5, 0xFFFFFF, 0.3);
     this.add(this.towerTop);
 
-    // 光环塔视觉 - 持续脉冲圆
-    if (config.special === 'aura_attack' || config.special === 'aura_speed') {
-      const auraColor = config.special === 'aura_attack' ? 0xFF8844 : 0x44CCFF;
-      const auraCircle = scene.add.circle(0, 0, config.range * 0.3, auraColor, 0.08);
-      auraCircle.setStrokeStyle(1, auraColor, 0.2);
+    // 光环塔 - 持续脉冲圆
+    if (sp === 'aura_attack' || sp === 'aura_speed') {
+      const auraColor = sp === 'aura_attack' ? 0xFF8844 : 0x44CCFF;
+      const auraCircle = scene.add.circle(0, 0, config.range * 0.3, auraColor, 0.06);
+      auraCircle.setStrokeStyle(1, auraColor, 0.15);
       this.add(auraCircle);
       scene.tweens.add({
-        targets: auraCircle, scale: 1.3, alpha: 0.03,
+        targets: auraCircle, scale: 1.3, alpha: 0.02,
         duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
       });
+    }
+
+    // 冰塔/毒塔/火塔 - 环境粒子
+    if (sp === 'freeze_aura' || sp === 'slow') {
+      this.startAmbientParticles(scene, 0x88CCFF, '❄', 2500);
+    } else if (sp === 'poison') {
+      this.startAmbientParticles(scene, 0x44FF44, '☁', 3000);
+    } else if (cat === 'aoe' && config.attackType.toString().includes('magic')) {
+      this.startAmbientParticles(scene, 0xFF6622, '🔥', 3500);
     }
 
     // 等级星标
@@ -141,6 +217,25 @@ export class Tower extends Phaser.GameObjects.Container {
   getUpgradeCost(): number | null {
     if (this.level >= this.config.upgrades.length) return null;
     return this.config.upgrades[this.level].cost;
+  }
+
+  private startAmbientParticles(scene: Phaser.Scene, color: number, emoji: string, interval: number): void {
+    scene.time.addEvent({
+      delay: interval,
+      loop: true,
+      callback: () => {
+        if (!this.active || !this.scene) return;
+        const ox = Phaser.Math.Between(-8, 8);
+        const oy = Phaser.Math.Between(-8, 8);
+        const p = this.scene.add.text(this.x + ox, this.y + oy, emoji, {
+          fontSize: '6px',
+        }).setOrigin(0.5).setDepth(4).setAlpha(0.5);
+        this.scene.tweens.add({
+          targets: p, y: p.y - 12, alpha: 0, duration: 1200,
+          onComplete: () => p.destroy(),
+        });
+      },
+    });
   }
 
   private updateLevelDisplay(): void {

@@ -522,7 +522,12 @@ export class GameScene extends Phaser.Scene {
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5, 0).setDepth(60).setAlpha(0);
 
-    // ==== 底部商店 (5列x2行) ====
+    // ==== 底部商店区域 ====
+    // 深色背景+上边缘高光
+    const shopBg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - UI_HEIGHT / 2, GAME_WIDTH, UI_HEIGHT, 0x0a0a18, 0.95).setDepth(50);
+    const shopTopLine = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - UI_HEIGHT, GAME_WIDTH, 2, 0x44FF44, 0.3).setDepth(51);
+    // 底部渐变暗角
+    const bottomFade = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 2, GAME_WIDTH, 4, 0x000000, 0.5).setDepth(50);
     this.createShop(uiY);
 
     // ==== 信息面板 ====
@@ -657,9 +662,19 @@ export class GameScene extends Phaser.Scene {
 
       bg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
         pointer.event.stopPropagation();
+        soundManager.playClick();
         this.selectTowerToBuild(config, i);
       });
-      bg.on('pointerover', () => { bg.setStrokeStyle(2, 0x44FF44); });
+      bg.on('pointerover', () => {
+        bg.setStrokeStyle(2, 0x44FF44);
+        soundManager.playHover();
+        // Tooltip
+        const special = config.special ? ` [${config.special}]` : '';
+        const atkLabel = this.getAttackTypeLabel(config.attackType);
+        const splashInfo = config.splash > 0 ? ` | AOE ${config.splash}px` : '';
+        const tip = `${config.name} - ${config.description}\n${atkLabel}${special} | 伤害${config.damage} | 射程${config.range} | 攻速${(config.attackSpeed / 1000).toFixed(1)}s${splashInfo}`;
+        this.showMessage(tip.split('\n')[0]);
+      });
       bg.on('pointerout', () => {
         const isSelected = this.selectedTowerConfig?.id === config.id;
         bg.setStrokeStyle(isSelected ? 2 : 1, isSelected ? 0x44FF44 : 0x444466);
@@ -1253,23 +1268,41 @@ export class GameScene extends Phaser.Scene {
         nearest.takeDamage(Math.floor(damage));
         hitSet.add(nearest);
 
-        // 闪电效果
-        const gfx = this.add.graphics().setDepth(16);
-        gfx.lineStyle(2, 0xFFFF44, 0.9);
-        // 锯齿状闪电线
-        const segments = 4;
+        // 闪电效果 - 双层（外层发光+内层亮白）
         const sx = current.x, sy = current.y;
         const ex = nearest.x, ey = nearest.y;
-        gfx.moveTo(sx, sy);
+        const segments = 5;
+
+        // 计算锯齿路径
+        const points: { x: number; y: number }[] = [{ x: sx, y: sy }];
         for (let s = 1; s < segments; s++) {
           const t = s / segments;
-          const mx = sx + (ex - sx) * t + Phaser.Math.Between(-8, 8);
-          const my = sy + (ey - sy) * t + Phaser.Math.Between(-8, 8);
-          gfx.lineTo(mx, my);
+          points.push({
+            x: sx + (ex - sx) * t + Phaser.Math.Between(-10, 10),
+            y: sy + (ey - sy) * t + Phaser.Math.Between(-10, 10),
+          });
         }
-        gfx.lineTo(ex, ey);
-        gfx.strokePath();
-        this.time.delayedCall(120, () => gfx.destroy());
+        points.push({ x: ex, y: ey });
+
+        // 外层发光（蓝色宽线）
+        const glowGfx = this.add.graphics().setDepth(16);
+        glowGfx.lineStyle(4, 0x4488FF, 0.4);
+        glowGfx.moveTo(points[0].x, points[0].y);
+        for (let p = 1; p < points.length; p++) glowGfx.lineTo(points[p].x, points[p].y);
+        glowGfx.strokePath();
+
+        // 内层高亮（白色细线）
+        const coreGfx = this.add.graphics().setDepth(17);
+        coreGfx.lineStyle(1.5, 0xFFFFFF, 0.9);
+        coreGfx.moveTo(points[0].x, points[0].y);
+        for (let p = 1; p < points.length; p++) coreGfx.lineTo(points[p].x, points[p].y);
+        coreGfx.strokePath();
+
+        // 击中火花
+        const spark = this.add.circle(ex, ey, 6, 0xFFFF88, 0.7).setDepth(18);
+        this.tweens.add({ targets: spark, scale: 0, alpha: 0, duration: 150, onComplete: () => spark.destroy() });
+
+        this.time.delayedCall(150, () => { glowGfx.destroy(); coreGfx.destroy(); });
 
         current = nearest;
         damage *= 0.7;

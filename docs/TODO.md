@@ -234,8 +234,9 @@
 - [ ] UI 缩放适配
 - [ ] 性能优化（移动GPU）
 
-### 30. 部署上线
-- [ ] GitHub Pages 部署
+### 30. 部署上线 ✅
+- [x] GitHub Pages 部署（GitHub Actions 自动构建）
+- [x] 线上地址: https://wenjiehs.github.io/WebGreenLoop/
 - [ ] 域名绑定
 - [ ] SEO 和 Open Graph
 - [ ] 加载优化（代码分割/资源压缩）

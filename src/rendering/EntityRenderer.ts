@@ -266,10 +266,21 @@ export class EntityRenderer {
     if (this.rangeCircle) { this.renderer.scene.remove(this.rangeCircle); this.rangeCircle = null; }
   }
 
-  showBuildPreview(px: number, py: number, config: any): void {
+  showBuildPreview(px: number, py: number, config: any, canBuild: boolean = true): void {
     this.clearBuildPreview();
     const model = TowerModelFactory.create(config, 0);
-    model.traverse(child => { if (child instanceof THREE.Mesh) { (child.material as any).transparent = true; (child.material as any).opacity = 0.4; } });
+    model.traverse(child => {
+      if (child instanceof THREE.Mesh) {
+        (child.material as any).transparent = true;
+        (child.material as any).opacity = 0.4;
+        // 红/绿色调
+        if (!canBuild) {
+          (child.material as any).color = new THREE.Color(0xFF2222);
+          (child.material as any).emissive = new THREE.Color(0xFF0000);
+          (child.material as any).emissiveIntensity = 0.3;
+        }
+      }
+    });
     const pos = ThreeRenderer.toWorld(px, py, 0);
     model.position.set(pos.x, 0, pos.z);
     this.renderer.scene.add(model);

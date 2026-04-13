@@ -63,6 +63,8 @@ export class Game {
   // 拖拽
   private isDragging: boolean = false;
   private lastMouse = { x: 0, y: 0 };
+  private shiftDown: boolean = false;
+  private helpVisible: boolean = false;
 
   // UI DOM
   private uiRoot!: HTMLElement;
@@ -196,7 +198,8 @@ export class Game {
       const grid = this.entityRenderer.getGridFromClick(mx, my, rect.width, rect.height);
       if (grid) {
         const { x, y } = this.gridManager.gridToPixel(grid.col, grid.row);
-        this.entityRenderer.showBuildPreview(x, y, this.selectedTowerConfig);
+        const canBuild = this.gridManager.canBuildAt(grid.col, grid.row) && this.economyManager.canBuild();
+        this.entityRenderer.showBuildPreview(x, y, this.selectedTowerConfig, canBuild);
       }
     });
 
@@ -215,19 +218,23 @@ export class Game {
     // 滚轮缩放
     this.canvas.addEventListener('wheel', (e) => { this.renderer.handleZoom(e.deltaY); }, { passive: true });
 
+    // Shift 追踪
+    window.addEventListener('keydown', (e) => { if (e.key === 'Shift') this.shiftDown = true; });
+    window.addEventListener('keyup', (e) => { if (e.key === 'Shift') this.shiftDown = false; });
+
     // 键盘
     window.addEventListener('keydown', (e) => {
       if (this.phase !== 'playing') return;
       switch (e.key) {
         case 'n': case 'N': if (!this.isPaused) this.waveManager.forceNextWave(); break;
         case 'Escape': this.cancelSelection(); break;
-        case ' ': this.toggleSpeed(); break;
+        case ' ': this.toggleSpeed(); e.preventDefault(); break;
         case 'p': case 'P': this.isPaused = !this.isPaused; this.showMessage(this.isPaused ? '⏸ 暂停' : '▶ 继续'); break;
         case 'u': case 'U': if (this.selectedTower) this.upgradeTower(this.selectedTower); break;
         case 's': case 'S': if (this.selectedTower) this.sellTower(this.selectedTower); break;
         case 'm': case 'M': this.startHeroMove(); break;
+        case 'h': case 'H': this.toggleHelp(); break;
         default:
-          // 数字键快捷选塔
           const num = parseInt(e.key);
           if (num >= 1 && num <= 9) {
             const configs = Object.values(TOWER_CONFIGS);
@@ -377,16 +384,22 @@ export class Game {
 
   private createPlayingUI(): void {
     this.uiRoot.innerHTML = `
-      <div id="topbar" style="position:absolute;top:0;left:0;right:0;height:44px;background:rgba(0,0,0,0.5);display:flex;align-items:center;padding:0 12px;gap:16px;font-size:13px;color:#FFF;z-index:10;">
+      <div id="topbar" style="position:absolute;top:0;left:0;right:0;height:44px;background:rgba(0,0,0,0.5);display:flex;align-items:center;padding:0 12px;gap:12px;font-size:13px;color:#FFF;z-index:10;flex-wrap:wrap;">
         <span id="gold-text">💰 ${this.economyManager.getGold()}</span>
+        <span id="wood-text" style="color:#CC9966;">🪵 ${this.economyManager.getWood()}</span>
         <span id="wave-text">波次: 0/50</span>
         <span id="pop-text">👥 ${this.economyManager.getPopulation()}/${this.economyManager.getMaxPopulation()}</span>
         <span id="score-text">⭐ 0</span>
         <span id="enemy-count" style="color:#88FF88;">怪物: 0/${MAX_ENEMIES_ON_MAP}</span>
         <span id="speed-text" style="cursor:pointer;pointer-events:auto;" onclick="window.__game?.toggleSpeed()">⏩ x1</span>
+        <span id="boss-timer" style="color:#FF4444;display:none;"></span>
         <span id="next-wave-text" style="color:#AAAAAA;"></span>
+        <span style="flex:1;"></span>
+        <button id="buy-wood-btn" style="pointer-events:auto;padding:2px 8px;background:#222;border:1px solid #998866;color:#CC9966;font-size:9px;cursor:pointer;border-radius:3px;font-family:inherit;" onclick="window.__game?.buyWood()">5000金→10木</button>
+        <button id="buy-pop-btn" style="pointer-events:auto;padding:2px 8px;background:#222;border:1px solid #8888CC;color:#8888CC;font-size:9px;cursor:pointer;border-radius:3px;font-family:inherit;" onclick="window.__game?.buyPopulation()">12木→+1人口</button>
       </div>
-      <div id="message-bar" style="position:absolute;top:48px;left:50%;transform:translateX(-50%);color:#FFF;font-size:13px;background:rgba(0,0,0,0.6);padding:4px 16px;border-radius:4px;opacity:0;transition:opacity 0.3s;white-space:nowrap;"></div>
+      <div id="message-bar" style="position:absolute;top:48px;left:50%;transform:translateX(-50%);color:#FFF;font-size:13px;background:rgba(0,0,0,0.6);padding:4px 16px;border-radius:4px;opacity:0;transition:opacity 0.3s;white-space:nowrap;z-index:15;"></div>
+      <div id="help-overlay" style="pointer-events:auto;display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);z-index:50;display:none;justify-content:center;align-items:center;"></div>
       <div id="shop-panel" style="pointer-events:auto;position:absolute;bottom:0;left:0;right:0;height:130px;background:#111122;border-top:2px solid #44ff44;display:flex;flex-wrap:wrap;gap:3px;padding:4px;overflow-y:auto;z-index:10;"></div>
       <div id="info-panel" style="pointer-events:auto;display:none;position:absolute;right:8px;top:50px;width:200px;background:rgba(20,20,40,0.95);border:1px solid #44FF44;border-radius:6px;padding:10px;color:#FFF;font-size:11px;z-index:20;"></div>`;
 
@@ -394,12 +407,35 @@ export class Game {
     this.createShop();
 
     // 经济回调
-    this.economyManager.onGoldChange = () => this.updateTopBar();
+    this.economyManager.onGoldChange = () => { this.updateTopBar(); this.updateShopAffordability(); };
     this.economyManager.onPopulationChange = () => this.updateTopBar();
     this.economyManager.onScoreChange = () => this.updateTopBar();
+    this.economyManager.onWoodChange = () => this.updateTopBar();
 
     // 全局暴露
     (window as any).__game = this;
+  }
+
+  /** A1: 购买木材 */
+  buyWood(): void {
+    if (this.economyManager.buyWood()) {
+      soundManager.playGold();
+      this.showMessage('🪵 购买10木材');
+    } else {
+      soundManager.playError();
+      this.showMessage('💰 金钱不足5000');
+    }
+  }
+
+  /** A1: 购买人口 */
+  buyPopulation(): void {
+    if (this.economyManager.buyPopulation()) {
+      soundManager.playGold();
+      this.showMessage('👥 人口上限+1');
+    } else {
+      soundManager.playError();
+      this.showMessage('🪵 木材不足12');
+    }
   }
 
   private createShop(): void {
@@ -409,42 +445,83 @@ export class Game {
       const btn = document.createElement('div');
       btn.className = 'shop-btn';
       btn.dataset.index = String(i);
-      btn.style.cssText = `width:148px;height:54px;background:#222233;border:1px solid #444466;border-radius:4px;cursor:pointer;padding:4px 6px;position:relative;display:flex;align-items:center;gap:6px;`;
+      btn.dataset.cost = String(config.cost);
+      btn.dataset.towerId = config.id;
+      btn.style.cssText = `width:148px;height:54px;background:#222233;border:1px solid #444466;border-radius:4px;cursor:pointer;padding:4px 6px;position:relative;display:flex;align-items:center;gap:6px;transition:opacity 0.2s;`;
       btn.innerHTML = `
         <div style="width:22px;height:22px;background:#${config.color.toString(16).padStart(6,'0')};border:1px solid #888;border-radius:3px;flex-shrink:0;"></div>
         <div>
           <div style="font-size:11px;color:#FFF;">${config.name}</div>
           <div style="font-size:10px;color:#FFD700;">💰${config.cost}</div>
-          <div style="font-size:9px;color:#889;">${config.splash > 0 ? 'AOE' : config.attackType}</div>
+          <div style="font-size:9px;color:#889;">${config.splash > 0 ? 'AOE' : config.attackType}${config.special ? ' [' + config.special + ']' : ''}</div>
         </div>
         <div style="position:absolute;top:2px;right:4px;font-size:9px;color:#556;">${i < 9 ? i + 1 : '0'}</div>`;
 
       btn.addEventListener('click', () => this.selectTowerToBuild(config, i));
       btn.addEventListener('mouseenter', () => {
         btn.style.borderColor = '#44FF44';
-        this.showMessage(`${config.name} - ${config.description}`);
+        const atkLabel = config.attackType;
+        const splashInfo = config.splash > 0 ? ` | AOE ${config.splash}px` : '';
+        this.showMessage(`${config.name} - ${config.description} | ${atkLabel}${splashInfo} | 伤害${config.damage} | 射程${config.range} | 攻速${(config.attackSpeed / 1000).toFixed(1)}s`);
       });
       btn.addEventListener('mouseleave', () => {
         btn.style.borderColor = this.selectedTowerConfig?.id === config.id ? '#44FF44' : '#444466';
       });
       panel.appendChild(btn);
     });
+    this.updateShopAffordability();
+  }
+
+  /** A5: 商店灰显 — 买不起的塔半透明 */
+  private updateShopAffordability(): void {
+    const gold = this.economyManager.getGold();
+    const canBuild = this.economyManager.canBuild();
+    this.uiRoot.querySelectorAll('.shop-btn').forEach(btn => {
+      const cost = parseInt((btn as HTMLElement).dataset.cost || '0');
+      const affordable = gold >= cost && canBuild;
+      (btn as HTMLElement).style.opacity = affordable ? '1' : '0.4';
+    });
   }
 
   private updateTopBar(): void {
     const g = this.uiRoot.querySelector('#gold-text');
+    const wd = this.uiRoot.querySelector('#wood-text');
     const w = this.uiRoot.querySelector('#wave-text');
     const p = this.uiRoot.querySelector('#pop-text');
     const s = this.uiRoot.querySelector('#score-text');
     const e = this.uiRoot.querySelector('#enemy-count');
     const sp = this.uiRoot.querySelector('#speed-text');
     const nw = this.uiRoot.querySelector('#next-wave-text');
+    const bt = this.uiRoot.querySelector('#boss-timer');
+
     if (g) g.textContent = `💰 ${this.economyManager.getGold()}`;
-    if (w) w.textContent = `波次: ${this.waveManager.getCurrentWave()}/50`;
+    if (wd) wd.textContent = `🪵 ${this.economyManager.getWood()}`;
     if (p) p.textContent = `👥 ${this.economyManager.getPopulation()}/${this.economyManager.getMaxPopulation()}`;
     if (s) s.textContent = `⭐ ${this.economyManager.getScore()}`;
     if (e) { const alive = this.enemies.length; e.textContent = `怪物: ${alive}/${MAX_ENEMIES_ON_MAP}`; (e as HTMLElement).style.color = alive > 80 ? '#FF4444' : alive > 50 ? '#FFAA00' : '#88FF88'; }
     if (sp) sp.textContent = `⏩ x${this.gameSpeed}`;
+
+    // A4: 波次模式标记
+    if (w) {
+      const mode = this.waveManager.getGameMode();
+      const wn = this.waveManager.getCurrentWave();
+      if (mode === 'hidden') w.textContent = `🌟 隐藏关: ${wn - 50}/10`;
+      else if (mode === 'endless') w.textContent = `♾️ 无尽 #${wn - 60} (x${Math.round(this.waveManager.getEndlessScaling() * 100)}%)`;
+      else w.textContent = `波次: ${wn}/50`;
+    }
+
+    // A4: Boss 倒计时
+    if (bt) {
+      const bossRemaining = this.waveManager.getBossTimeRemaining();
+      if (bossRemaining > 0) {
+        (bt as HTMLElement).style.display = 'inline';
+        bt.textContent = `⏱ BOSS: ${Math.ceil(bossRemaining / 1000)}s`;
+      } else {
+        (bt as HTMLElement).style.display = 'none';
+      }
+    }
+
+    // 下一波倒计时
     if (nw && this.waveManager.isWaitingForNextWave()) {
       const remaining = this.waveManager.getNextWaveCountdown();
       nw.textContent = remaining > 0 ? `下一波: ${Math.ceil(remaining / 1000)}s | 按N提前` : '';
@@ -512,7 +589,13 @@ export class Game {
     this.towers.push(tower);
     soundManager.playBuild();
     this.showMessage(`✅ ${this.selectedTowerConfig.name} 已建造`);
-    this.cancelSelection();
+
+    // A7: Shift 连续建造
+    if (!this.shiftDown) {
+      this.cancelSelection();
+    } else {
+      this.entityRenderer.clearBuildPreview();
+    }
   }
 
   private upgradeTower(tower: TowerLogic): void {
@@ -774,5 +857,59 @@ export class Game {
       this.messageEl.style.opacity = '1';
       this.messageTimer = 3000;
     }
+  }
+
+  /** A3: 克制表 */
+  private toggleHelp(): void {
+    this.helpVisible = !this.helpVisible;
+    const overlay = this.uiRoot.querySelector('#help-overlay') as HTMLElement;
+    if (!overlay) return;
+    if (this.helpVisible) {
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `
+        <div style="background:#1a1a2e;border:2px solid #44FF44;border-radius:8px;padding:20px;max-width:700px;color:#FFF;font-size:12px;pointer-events:auto;">
+          <h2 style="color:#44FF44;margin:0 0 10px;">📊 攻击/护甲克制矩阵</h2>
+          <table style="border-collapse:collapse;width:100%;font-size:11px;">
+            <tr style="background:#222;">
+              <th style="padding:4px 8px;border:1px solid #333;"></th>
+              <th style="padding:4px 8px;border:1px solid #333;">无甲</th>
+              <th style="padding:4px 8px;border:1px solid #333;">轻甲</th>
+              <th style="padding:4px 8px;border:1px solid #333;">中甲</th>
+              <th style="padding:4px 8px;border:1px solid #333;">重甲</th>
+              <th style="padding:4px 8px;border:1px solid #333;">加强甲</th>
+              <th style="padding:4px 8px;border:1px solid #333;">英雄甲</th>
+              <th style="padding:4px 8px;border:1px solid #333;">神圣甲</th>
+            </tr>
+            ${this.renderDamageRow('普通', [1.0,1.0,1.5,1.0,0.7,1.0,0.05])}
+            ${this.renderDamageRow('穿刺', [1.25,1.5,0.75,1.0,0.75,0.75,0.05])}
+            ${this.renderDamageRow('魔法', [1.0,1.25,0.75,1.5,0.75,0.75,0.05])}
+            ${this.renderDamageRow('攻城', [1.25,1.0,0.5,1.0,1.5,1.5,0.05])}
+            ${this.renderDamageRow('混乱', [1.0,1.0,1.0,1.0,1.0,2.0,2.0])}
+            ${this.renderDamageRow('英雄', [1.0,1.0,1.0,1.0,1.5,1.0,2.0])}
+            ${this.renderDamageRow('神圣', [1.0,1.0,1.0,1.0,1.0,1.0,1.5])}
+          </table>
+          <p style="color:#888;margin-top:10px;font-size:10px;">绿色=克制(>100%) 红色=被克(&#60;100%) | 按 H 关闭</p>
+          <div style="margin-top:10px;font-size:10px;color:#AAA;">
+            <p>🛡 魔免怪物：受魔法攻击伤害-70%</p>
+            <p>☠ 毒免怪物：完全免疫毒效果</p>
+            <p>✈ 飞行怪物：只有防空塔能攻击</p>
+            <p>👁 隐形怪物：需要侦查塔揭示才能攻击</p>
+          </div>
+        </div>`;
+      overlay.addEventListener('click', () => this.toggleHelp());
+    } else {
+      overlay.style.display = 'none';
+    }
+  }
+
+  private renderDamageRow(name: string, values: number[]): string {
+    return `<tr>
+      <td style="padding:4px 8px;border:1px solid #333;color:#FFCC44;font-weight:bold;">${name}</td>
+      ${values.map(v => {
+        const pct = Math.round(v * 100);
+        const color = v > 1 ? '#44FF44' : v < 1 ? '#FF4444' : '#FFFFFF';
+        return `<td style="padding:4px 8px;border:1px solid #333;color:${color};text-align:center;">${pct}%</td>`;
+      }).join('')}
+    </tr>`;
   }
 }

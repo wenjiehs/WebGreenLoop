@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../utils/constants';
+import { soundManager } from '../systems/SoundManager';
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'hell';
 
@@ -19,6 +20,7 @@ export class MainMenuScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor('#0d0d1a');
+    soundManager.startMenuBGM();
 
     // 装饰背景
     const gfx = this.add.graphics();

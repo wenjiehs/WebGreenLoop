@@ -68,7 +68,22 @@ export class Enemy extends Phaser.GameObjects.Container {
 
     // 怪物身体
     this.bodySprite = scene.add.circle(0, 0, config.radius, config.color);
+    this.bodySprite.setStrokeStyle(1, Phaser.Display.Color.IntegerToColor(config.color).darken(30).color, 0.6);
     this.add(this.bodySprite);
+
+    // 内部高光（立体感）
+    const highlight = scene.add.circle(-config.radius * 0.25, -config.radius * 0.25, config.radius * 0.35,
+      Phaser.Display.Color.IntegerToColor(config.color).lighten(40).color, 0.4);
+    this.add(highlight);
+
+    // 行走摇摆动画
+    if (!config.isFlying) {
+      scene.tweens.add({
+        targets: this.bodySprite, scaleX: 1.08, scaleY: 0.92,
+        duration: 200 + Math.floor(80 / Math.max(config.speed, 0.5)),
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
+    }
 
     // 隐形单位半透明
     if (config.isInvisible) {
@@ -91,8 +106,19 @@ export class Enemy extends Phaser.GameObjects.Container {
       const glow = scene.add.circle(0, 0, config.radius + 4);
       glow.setStrokeStyle(2, 0xFFD700, 0.6);
       this.add(glow);
+      // Boss 光环脉冲
+      scene.tweens.add({
+        targets: glow, scale: 1.3, alpha: 0.2,
+        duration: 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
       const crown = scene.add.text(0, -config.radius - 8, '👑', { fontSize: '10px' }).setOrigin(0.5);
       this.add(crown);
+      // Boss 入场缩放动画
+      this.setScale(0.2);
+      scene.tweens.add({
+        targets: this, scaleX: 1, scaleY: 1,
+        duration: 500, ease: 'Back.easeOut',
+      });
     }
 
     // 特性标记

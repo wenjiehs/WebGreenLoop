@@ -4,6 +4,7 @@ import { TILE_SIZE } from '../utils/constants';
 import { distanceBetween } from '../utils/helpers';
 import { Enemy } from './Enemy';
 import { Projectile } from './Projectile';
+import { soundManager } from '../systems/SoundManager';
 
 /**
  * 防御塔实体
@@ -54,9 +55,34 @@ export class Tower extends Phaser.GameObjects.Container {
     this.towerBody.setStrokeStyle(1, 0x000000, 0.6);
     this.add(this.towerBody);
 
+    // 塔类型图标
+    const iconMap: Record<string, string> = {
+      'aoe': '💥', 'bounce': '↗', 'critical': '⚡', 'poison': '☠',
+      'freeze_aura': '❄', 'slow': '❄', 'armor_reduce': '🔻', 'aura_attack': '⚔',
+      'aura_speed': '⏩', 'antiair': '✈', 'chaos': '☯', 'hero_grow': '⭐',
+      'execute': '💀', 'detect': '👁', 'chain': '⚡',
+    };
+    const icon = iconMap[config.special || ''] || '';
+    if (icon) {
+      const iconText = scene.add.text(0, -2, icon, { fontSize: '10px' }).setOrigin(0.5);
+      this.add(iconText);
+    }
+
     // 塔中心标记（攻击类型对应颜色）
-    this.towerTop = scene.add.circle(0, 0, 5, config.projectileColor);
+    this.towerTop = scene.add.circle(0, icon ? 5 : 0, 4, config.projectileColor);
     this.add(this.towerTop);
+
+    // 光环塔视觉 - 持续脉冲圆
+    if (config.special === 'aura_attack' || config.special === 'aura_speed') {
+      const auraColor = config.special === 'aura_attack' ? 0xFF8844 : 0x44CCFF;
+      const auraCircle = scene.add.circle(0, 0, config.range * 0.3, auraColor, 0.08);
+      auraCircle.setStrokeStyle(1, auraColor, 0.2);
+      this.add(auraCircle);
+      scene.tweens.add({
+        targets: auraCircle, scale: 1.3, alpha: 0.03,
+        duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      });
+    }
 
     // 等级星标
     this.levelStars = scene.add.text(0, TILE_SIZE / 2 - 2, '', {
@@ -250,6 +276,7 @@ export class Tower extends Phaser.GameObjects.Container {
 
     // 秒杀塔 - 直接秒杀非BOSS单位
     if (this.config.special === 'execute') {
+      soundManager.playExecute();
       if (!target.getConfig().isBoss) {
         const executeText = this.scene.add.text(target.x, target.y - 10, '💀秒杀!', {
           fontSize: '12px', color: '#FF0000', fontStyle: 'bold',
@@ -268,8 +295,21 @@ export class Tower extends Phaser.GameObjects.Container {
       return;
     }
 
-    // 发射动画
+    // 发射动画 + 后坐力
     this.scene.tweens.add({ targets: this.towerTop, scaleX: 1.4, scaleY: 1.4, duration: 60, yoyo: true });
+    this.scene.tweens.add({ targets: this, y: this.y + 1, duration: 40, yoyo: true });
+
+    // 塔类型音效
+    const sp = this.config.special;
+    if (sp === 'aoe') soundManager.playCannon();
+    else if (sp === 'poison') soundManager.playPoison();
+    else if (sp === 'chain') soundManager.playLightning();
+    else if (sp === 'freeze_aura' || sp === 'slow') soundManager.playFreeze();
+    else if (sp === 'critical') {} // 暴击时单独播
+    else if (sp === 'bounce') soundManager.playBounce();
+    else if (this.config.category === 'aoe') soundManager.playFire();
+    else if (this.config.attackType.toString().includes('magic')) soundManager.playMagic();
+    else soundManager.playArrow();
 
     // 重击塔暴击判定
     let damage = this.currentDamage + this.auraDamageBonus;
@@ -279,8 +319,9 @@ export class Tower extends Phaser.GameObjects.Container {
     if (this.config.special === 'critical') {
       const critChance = 0.15 + this.level * 0.05; // 15% base + 5%/level
       if (Math.random() < critChance) {
-        damage = Math.floor(damage * (2.0 + this.level * 0.3)); // 2x~3.5x crit
+        damage = Math.floor(damage * (2.0 + this.level * 0.3));
         projColor = 0xFF4444;
+        soundManager.playCritical();
         const critText = this.scene.add.text(this.x, this.y - 12, '💥暴击!', {
           fontSize: '11px', color: '#FF4444', fontStyle: 'bold',
           stroke: '#000000', strokeThickness: 2,

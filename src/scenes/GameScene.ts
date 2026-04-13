@@ -312,6 +312,7 @@ export class GameScene extends Phaser.Scene {
 
     this.isPaused = false;
     soundManager.playBuild();
+    soundManager.startGameBGM();
     this.showMessage(`${heroConfig.name} 已就位！点击英雄塔查看属性和技能`);
   }
 
@@ -320,31 +321,45 @@ export class GameScene extends Phaser.Scene {
   private drawMap(): void {
     const mapHeight = GAME_HEIGHT - UI_HEIGHT;
 
-    // 背景草地（带纹理感）
-    const grassBg = this.add.rectangle(GAME_WIDTH / 2, mapHeight / 2, GAME_WIDTH, mapHeight, COLORS.GRASS);
+    // 背景草地
+    this.add.rectangle(GAME_WIDTH / 2, mapHeight / 2, GAME_WIDTH, mapHeight, COLORS.GRASS);
 
-    // 草地纹理点缀
+    // 草地纹理 - 多层点缀
     const grassGfx = this.add.graphics();
-    for (let i = 0; i < 200; i++) {
+    // 大块深色草斑
+    for (let i = 0; i < 60; i++) {
       const gx = Phaser.Math.Between(0, GAME_WIDTH);
       const gy = Phaser.Math.Between(0, mapHeight);
-      const shade = Phaser.Math.Between(0x1a, 0x40);
-      grassGfx.fillStyle(Phaser.Display.Color.GetColor(shade, 80 + Phaser.Math.Between(0, 30), shade), 0.3);
-      grassGfx.fillCircle(gx, gy, Phaser.Math.Between(1, 3));
+      grassGfx.fillStyle(0x1a4a1a, 0.2);
+      grassGfx.fillCircle(gx, gy, Phaser.Math.Between(4, 10));
+    }
+    // 小草尖
+    for (let i = 0; i < 300; i++) {
+      const gx = Phaser.Math.Between(0, GAME_WIDTH);
+      const gy = Phaser.Math.Between(0, mapHeight);
+      const shade = Phaser.Math.Between(0x20, 0x50);
+      grassGfx.fillStyle(Phaser.Display.Color.GetColor(shade, 70 + Phaser.Math.Between(0, 40), shade), 0.25);
+      grassGfx.fillCircle(gx, gy, Phaser.Math.Between(1, 2));
     }
 
-    // 绘制路径
+    // 绘制路径 - 石砖纹理
     const pathTiles = this.pathManager.getPathTiles();
     pathTiles.forEach((key) => {
       const [col, row] = key.split(',').map(Number);
       if (row * TILE_SIZE < mapHeight) {
-        const rect = this.add.rectangle(
-          col * TILE_SIZE + TILE_SIZE / 2,
-          row * TILE_SIZE + TILE_SIZE / 2,
-          TILE_SIZE, TILE_SIZE,
-          COLORS.PATH,
-        );
+        const px = col * TILE_SIZE + TILE_SIZE / 2;
+        const py = row * TILE_SIZE + TILE_SIZE / 2;
+        // 路面底色
+        const rect = this.add.rectangle(px, py, TILE_SIZE, TILE_SIZE, COLORS.PATH);
         rect.setStrokeStyle(0.5, COLORS.PATH_BORDER, 0.3);
+        // 石砖线
+        const brickGfx = this.add.graphics();
+        brickGfx.lineStyle(0.5, 0x000000, 0.08);
+        brickGfx.moveTo(px - TILE_SIZE / 2, py);
+        brickGfx.lineTo(px + TILE_SIZE / 2, py);
+        brickGfx.moveTo(px, py - TILE_SIZE / 2);
+        brickGfx.lineTo(px, py + TILE_SIZE / 2);
+        brickGfx.strokePath();
       }
     });
 
@@ -1291,7 +1306,14 @@ export class GameScene extends Phaser.Scene {
 
   private onEnemyDeath(enemy: Enemy): void {
     this.economyManager.onEnemyKilled(enemy.getConfig().goldReward);
-    soundManager.playEnemyDeath();
+
+    const isBoss = enemy.getConfig().isBoss;
+    if (isBoss) {
+      soundManager.playBossDeath();
+      this.spawnBossDeathEffect(enemy.x, enemy.y);
+    } else {
+      soundManager.playEnemyDeath();
+    }
 
     // 英雄塔获得经验
     if (this.heroTower?.active) {
@@ -1306,6 +1328,41 @@ export class GameScene extends Phaser.Scene {
 
     this.waveManager.onEnemyDied();
     this.updateEnemyCountUI();
+  }
+
+  private spawnBossDeathEffect(x: number, y: number): void {
+    // 多波爆炸
+    for (let wave = 0; wave < 3; wave++) {
+      this.time.delayedCall(wave * 200, () => {
+        const ring = this.add.circle(x, y, 10, 0xFFAA00, 0.5).setDepth(25);
+        ring.setStrokeStyle(3, 0xFF4400);
+        this.tweens.add({
+          targets: ring, scale: 5, alpha: 0, duration: 500,
+          onComplete: () => ring.destroy(),
+        });
+        // 碎片
+        for (let i = 0; i < 12; i++) {
+          const angle = (i / 12) * Math.PI * 2;
+          const p = this.add.circle(x, y, Phaser.Math.Between(2, 5),
+            Phaser.Math.Between(0xFF4400, 0xFFFF00), 0.9).setDepth(26);
+          this.tweens.add({
+            targets: p,
+            x: x + Math.cos(angle) * Phaser.Math.Between(30, 60),
+            y: y + Math.sin(angle) * Phaser.Math.Between(30, 60),
+            alpha: 0, scale: 0, duration: 600 + Phaser.Math.Between(0, 300),
+            onComplete: () => p.destroy(),
+          });
+        }
+      });
+    }
+    // 震屏
+    this.cameras.main.shake(400, 0.008);
+    // Boss击杀文字
+    const txt = this.add.text(x, y - 20, '💀 BOSS KILLED!', {
+      fontSize: '16px', color: '#FFD700', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(30);
+    this.tweens.add({ targets: txt, y: txt.y - 40, alpha: 0, duration: 1500, onComplete: () => txt.destroy() });
   }
 
   private spawnDeathEffect(x: number, y: number, color: number): void {
@@ -1358,6 +1415,7 @@ export class GameScene extends Phaser.Scene {
       this.showMessage(`⚠️ 第 ${waveNum} 波 - BOSS 来袭！限时击杀！`);
       this.cameras.main.shake(300, 0.005);
       soundManager.playBossAlert();
+      soundManager.startBossBGM();
     } else if (mode === 'hidden') {
       this.showMessage(`🌟 隐藏关 第 ${waveNum - 50} 波`);
       soundManager.playWaveStart();
@@ -1368,10 +1426,14 @@ export class GameScene extends Phaser.Scene {
       this.showMessage(`第 ${waveNum} 波开始`);
       soundManager.playWaveStart();
     }
+
+    // 波次横幅动画
+    this.showWaveBanner(waveNum);
   }
 
   private onWaveComplete(waveNum: number): void {
     this.showMessage(`✅ 第 ${waveNum} 波完成！+1 PF`);
+    soundManager.startGameBGM(); // 恢复正常 BGM
     // 预览下一波
     const nextWaveIdx = waveNum; // waveNum is 1-based, array is 0-based
     if (nextWaveIdx < WAVE_CONFIGS.length) {
@@ -1400,6 +1462,7 @@ export class GameScene extends Phaser.Scene {
       this.showMessage('🎉 恭喜通关！');
     }
     this.cameras.main.flash(1000, 68, 255, 68);
+    soundManager.stopBGM();
     soundManager.playVictory();
 
     this.time.delayedCall(3000, () => {
@@ -1419,6 +1482,7 @@ export class GameScene extends Phaser.Scene {
     this.isGameOver = true;
     this.showMessage(`💀 游戏结束：${reason}`);
     this.cameras.main.shake(500, 0.01);
+    soundManager.stopBGM();
     soundManager.playGameOver();
 
     this.time.delayedCall(3000, () => {
@@ -1602,6 +1666,36 @@ export class GameScene extends Phaser.Scene {
     this.woodText.setText(`🪵 ${this.economyManager.getWood()}`);
     this.popText.setText(`👥 ${this.economyManager.getPopulation()}/${this.economyManager.getMaxPopulation()}`);
     this.scoreText.setText(`⭐ ${this.economyManager.getScore()}`);
+  }
+
+  private showWaveBanner(waveNum: number): void {
+    const mapHeight = GAME_HEIGHT - UI_HEIGHT;
+    const mode = this.waveManager.getGameMode();
+
+    let label = `WAVE ${waveNum}`;
+    let color = '#FFFFFF';
+    if (mode === 'hidden') { label = `🌟 HIDDEN ${waveNum - 50}`; color = '#FFD700'; }
+    else if (mode === 'endless') { label = `♾️ ENDLESS ${waveNum - 60}`; color = '#FF4444'; }
+
+    // 横幅背景
+    const banner = this.add.rectangle(GAME_WIDTH / 2, mapHeight / 2, GAME_WIDTH + 20, 50, 0x000000, 0.6).setDepth(80);
+    const text = this.add.text(GAME_WIDTH / 2, mapHeight / 2, label, {
+      fontSize: '28px', fontFamily: 'Microsoft YaHei, sans-serif', color,
+      fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(81);
+
+    // 从左滑入
+    banner.setX(-GAME_WIDTH);
+    text.setX(-GAME_WIDTH);
+    this.tweens.add({ targets: [banner, text], x: GAME_WIDTH / 2, duration: 300, ease: 'Cubic.easeOut' });
+
+    // 1秒后淡出
+    this.time.delayedCall(1200, () => {
+      this.tweens.add({
+        targets: [banner, text], alpha: 0, duration: 400,
+        onComplete: () => { banner.destroy(); text.destroy(); },
+      });
+    });
   }
 
   private showMessage(msg: string): void {

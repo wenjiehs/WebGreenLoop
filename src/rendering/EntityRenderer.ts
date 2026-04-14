@@ -3,6 +3,7 @@ import { ThreeRenderer } from '../rendering/ThreeRenderer';
 import { TerrainBuilder } from '../rendering/TerrainBuilder';
 import { TowerModelFactory } from '../rendering/TowerModelFactory';
 import { EnemyModelFactory } from '../rendering/EnemyModelFactory';
+import { HeroModelFactory } from '../rendering/HeroModelFactory';
 import { EffectsSystem } from '../rendering/EffectsSystem';
 import { TowerLogic } from '../entities/TowerLogic';
 import { EnemyLogic } from '../entities/EnemyLogic';
@@ -191,23 +192,7 @@ export class EntityRenderer {
       return;
     }
     if (!this.heroSync) {
-      const model = new THREE.Group();
-      const hc = heroTower.config;
-      const base = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.35, 0.45, 0.25, 8),
-        new THREE.MeshPhongMaterial({ color: hc.color, emissive: hc.color, emissiveIntensity: 0.15 }),
-      );
-      base.position.y = 0.125; base.castShadow = true; model.add(base);
-      const hero = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(0.22, 1),
-        new THREE.MeshPhongMaterial({ color: hc.color, emissive: 0xFFD700, emissiveIntensity: 0.2 }),
-      );
-      hero.position.y = 0.5; hero.castShadow = true; hero.name = 'heroCore'; model.add(hero);
-      const aura = new THREE.Mesh(
-        new THREE.TorusGeometry(0.4, 0.015, 6, 20),
-        new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.25 }),
-      );
-      aura.rotation.x = Math.PI / 2; aura.position.y = 0.1; aura.name = 'heroAura'; model.add(aura);
+      const model = HeroModelFactory.create(heroTower.config);
       const pos = ThreeRenderer.toWorld(heroTower.x, heroTower.y, 0);
       model.position.set(pos.x, 0, pos.z);
       this.towerGroup.add(model);

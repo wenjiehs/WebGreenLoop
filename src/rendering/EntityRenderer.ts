@@ -77,9 +77,11 @@ export class EntityRenderer {
 
   // ===== 塔 =====
   private syncTowers(towers: TowerLogic[]): void {
+    const MODEL_SCALE = 2.5; // 模型统一放大
     for (const tower of towers) {
       if (!this.towerSyncs.has(tower)) {
         const model = TowerModelFactory.create(tower.config, tower.level);
+        model.scale.setScalar(MODEL_SCALE);
         const pos = ThreeRenderer.toWorld(tower.x, tower.y, 0);
         model.position.set(pos.x, -0.5, pos.z);
         this.towerGroup.add(model);
@@ -96,36 +98,39 @@ export class EntityRenderer {
       if (tower.level !== sync.lastLevel) {
         this.towerGroup.remove(sync.model);
         const newModel = TowerModelFactory.create(tower.config, tower.level);
+        newModel.scale.setScalar(MODEL_SCALE);
         const pos = ThreeRenderer.toWorld(tower.x, tower.y, 0);
         newModel.position.set(pos.x, 0, pos.z);
         this.towerGroup.add(newModel);
         sync.model = newModel;
         sync.lastLevel = tower.level;
       }
-      // C3: 塔攻击弹跳动画
+      // C3: 塔攻击弹跳动画（持续更长，效果更明显）
       if (tower.justFired) {
         sync.attackAnim = 1.0;
         tower.justFired = false;
       }
       if (sync.attackAnim > 0) {
-        sync.attackAnim -= 0.08;
+        sync.attackAnim -= 0.04;
         if (sync.attackAnim < 0) sync.attackAnim = 0;
-        const bounce = Math.sin(sync.attackAnim * Math.PI) * 0.08;
-        const squeeze = 1 + Math.sin(sync.attackAnim * Math.PI) * 0.06;
+        const bounce = Math.sin(sync.attackAnim * Math.PI) * 0.15;
+        const squeeze = 1 + Math.sin(sync.attackAnim * Math.PI) * 0.08;
         sync.model.position.y = bounce;
-        sync.model.scale.set(squeeze, 1 / squeeze, squeeze); // 横向拉伸纵向压缩
+        sync.model.scale.set(MODEL_SCALE * squeeze, MODEL_SCALE / squeeze, MODEL_SCALE * squeeze);
       } else {
         sync.model.position.y = 0;
-        sync.model.scale.set(1, 1, 1);
+        sync.model.scale.setScalar(MODEL_SCALE);
       }
     }
   }
 
   // ===== 怪物 =====
   private syncEnemies(enemies: EnemyLogic[], time: number): void {
+    const ENEMY_SCALE = 2.5;
     for (const enemy of enemies) {
       if (!this.enemySyncs.has(enemy)) {
         const model = EnemyModelFactory.create(enemy.config);
+        model.scale.setScalar(ENEMY_SCALE);
         this.enemyGroup.add(model);
         const pos = ThreeRenderer.toWorld(enemy.x, enemy.y, 0);
         this.enemySyncs.set(enemy, { enemy, model, walkPhase: Math.random() * Math.PI * 2, lastX: pos.x, lastZ: pos.z });
@@ -193,6 +198,7 @@ export class EntityRenderer {
     }
     if (!this.heroSync) {
       const model = HeroModelFactory.create(heroTower.config);
+      model.scale.setScalar(2.8); // 英雄比普通塔稍大
       const pos = ThreeRenderer.toWorld(heroTower.x, heroTower.y, 0);
       model.position.set(pos.x, 0, pos.z);
       this.towerGroup.add(model);
@@ -224,7 +230,7 @@ export class EntityRenderer {
   spawnProjectile(fromX: number, fromY: number, toX: number, toY: number, color: number, isAOE: boolean): void {
     const from = ThreeRenderer.toWorld(fromX, fromY, 0.3);
     const to = ThreeRenderer.toWorld(toX, toY, 0.12);
-    const size = isAOE ? 0.09 : 0.06; // 弹道更大更可见
+    const size = isAOE ? 0.16 : 0.10; // 配合放大后的模型
     const proj = new THREE.Mesh(
       isAOE ? new THREE.SphereGeometry(size, 5, 4) : new THREE.ConeGeometry(size * 0.5, size * 2, 4),
       new THREE.MeshBasicMaterial({ color }),
@@ -289,6 +295,7 @@ export class EntityRenderer {
   showBuildPreview(px: number, py: number, config: any, canBuild: boolean = true): void {
     this.clearBuildPreview();
     const model = TowerModelFactory.create(config, 0);
+    model.scale.setScalar(2.5); // 和实际塔一样大
     model.traverse(child => {
       if (child instanceof THREE.Mesh) {
         (child.material as any).transparent = true;

@@ -21,6 +21,7 @@ export class TerrainBuilder {
     this.buildGround();
     this.buildPath(pathTiles);
     this.buildBanks(pathTiles);
+    this.buildCornerRounds(pathTiles);
     this.buildDecorations(pathTiles);
     return this.group;
   }
@@ -178,6 +179,46 @@ export class TerrainBuilder {
         stoneMesh.setMatrixAt(i, dummy.matrix);
       });
       this.group.add(stoneMesh);
+    }
+  }
+
+  /** 四角圆弧过渡 — 在跑道转弯处放置圆柱体平滑 */
+  private buildCornerRounds(pathTiles: Set<string>): void {
+    const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
+    const mapRows = Math.floor((GAME_HEIGHT - 140) / TILE_SIZE);
+    const margin = 5; // 和 PathManager 一致
+    const left = margin, right = cols - margin - 1;
+    const top = margin, bottom = mapRows - margin - 1;
+    const bankH = BANK_Y - PATH_Y;
+    const ts = TILE_SIZE * ThreeRenderer.SCALE;
+    const cornerRadius = ts * 2.2; // 圆弧半径
+
+    // 4个角落：[中心格, 圆弧朝向角度]
+    const corners: [number, number, number, number][] = [
+      // col, row, startAngle, quadrant
+      [left, top, Math.PI, Math.PI * 1.5],       // 左上
+      [right, top, Math.PI * 1.5, Math.PI * 2],   // 右上
+      [right, bottom, 0, Math.PI * 0.5],          // 右下
+      [left, bottom, Math.PI * 0.5, Math.PI],     // 左下
+    ];
+
+    for (const [cx, cy, startA, endA] of corners) {
+      const wp = ThreeRenderer.toWorld(cx * TILE_SIZE + TILE_SIZE / 2, cy * TILE_SIZE + TILE_SIZE / 2, 0);
+
+      // 圆弧泥土块（quarter cylinder）
+      const arcGeo = new THREE.CylinderGeometry(cornerRadius, cornerRadius, bankH, 12, 1, false, startA, endA - startA);
+      const arcMesh = new THREE.Mesh(arcGeo, new THREE.MeshLambertMaterial({ color: 0x6B5B3A }));
+      arcMesh.position.set(wp.x, PATH_Y + bankH / 2, wp.z);
+      arcMesh.receiveShadow = true;
+      arcMesh.castShadow = true;
+      this.group.add(arcMesh);
+
+      // 圆弧草皮顶（quarter circle disc）
+      const capGeo = new THREE.CylinderGeometry(cornerRadius * 1.02, cornerRadius * 1.02, 0.04, 12, 1, false, startA, endA - startA);
+      const capMesh = new THREE.Mesh(capGeo, new THREE.MeshLambertMaterial({ color: 0x3A7A2A }));
+      capMesh.position.set(wp.x, BANK_Y + 0.02, wp.z);
+      capMesh.receiveShadow = true;
+      this.group.add(capMesh);
     }
   }
 

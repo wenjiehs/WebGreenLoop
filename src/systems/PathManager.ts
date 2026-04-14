@@ -88,6 +88,15 @@ export class PathManager {
       }
     }
 
+    // 四角填充（让转弯处不留缝隙）
+    for (const [cx, cy] of [[left, top], [right, top], [left, bottom], [right, bottom]]) {
+      for (let dc = -hw; dc < hw; dc++) {
+        for (let dr = -hw; dr < hw; dr++) {
+          this.pathTiles.add(`${cx + dc},${cy + dr}`);
+        }
+      }
+    }
+
     // 生成中心线 waypoints（怪物沿此路径跑）
     // 顺时针: 从出怪口（左上角）开始 → 右 → 下 → 左 → 上 → 回到起点
     // 出怪口在左上角

@@ -73,6 +73,7 @@ export class Game {
   // UI DOM
   private uiRoot!: HTMLElement;
   private messageEl!: HTMLElement;
+  private minimapCanvas: HTMLCanvasElement | null = null;
   private messageTimer: number = 0;
 
   // 计时
@@ -114,7 +115,7 @@ export class Game {
 
       // 波次
       this.waveManager.update(delta);
-      if (this.waveManager.checkEnemyLimit()) return;
+      this.waveManager.checkEnemyLimit(); // 触发 onGameOver → isGameOver=true
 
       // 光环
       this.updateAuras();
@@ -242,8 +243,8 @@ export class Game {
         case 'Escape': this.cancelSelection(); break;
         case ' ': this.toggleSpeed(); e.preventDefault(); break;
         case 'p': case 'P': this.isPaused = !this.isPaused; this.showMessage(this.isPaused ? '⏸ 暂停' : '▶ 继续'); break;
-        case 'u': case 'U': if (this.selectedTower) this.upgradeTower(this.selectedTower); break;
-        case 's': case 'S': if (this.selectedTower) this.sellTower(this.selectedTower); break;
+        case 'u': case 'U': if (this.selectedTower && !this.heroTower?.isSelected) this.upgradeTower(this.selectedTower); break;
+        case 's': case 'S': if (this.selectedTower && !this.heroTower?.isSelected) this.sellTower(this.selectedTower); break;
         case 'm': case 'M': this.startHeroMove(); break;
         case 'h': case 'H': this.toggleHelp(); break;
         default:
@@ -416,6 +417,7 @@ export class Game {
       <div id="info-panel" style="pointer-events:auto;display:none;position:absolute;right:8px;top:50px;width:200px;background:rgba(20,20,40,0.95);border:1px solid #44FF44;border-radius:6px;padding:10px;color:#FFF;font-size:11px;z-index:20;"></div>`;
 
     this.messageEl = this.uiRoot.querySelector('#message-bar')!;
+    this.minimapCanvas = null; // 重建 UI 后清除缓存
     this.createShop();
 
     // 经济回调
@@ -652,6 +654,10 @@ export class Game {
     this.heroTower.relocate(col, row);
     soundManager.playBuild();
     this.showMessage(`✅ ${this.heroTower.config.name} 已移动`);
+    // MISS-003: 刷新选中位置和面板
+    this.entityRenderer.clearSelection();
+    this.entityRenderer.showSelection(this.heroTower.x, this.heroTower.y, this.heroTower.getRange());
+    this.showHeroInfo();
   }
 
   toggleSpeed(): void {
@@ -679,7 +685,7 @@ export class Game {
         }
       }
     } else {
-      let closest: EnemyLogic | null = null, closestDist = 40;
+      let closest: EnemyLogic | null = null, closestDist = 22;
       for (const e of this.enemies) {
         if (e.isDying() || !e.active) continue;
         const dist = distanceBetween(x, y, e.x, e.y);
@@ -725,14 +731,19 @@ export class Game {
   }
 
   private updateAuras(): void {
+    // 先清零所有塔的 buff
     for (const tower of this.towers) tower.setAuraBuff(0, 0);
+    // 再累加每个光环塔的 buff（多个光环叠加）
     for (const aura of this.towers) {
       if (aura.config.special !== 'aura_attack' && aura.config.special !== 'aura_speed') continue;
       for (const tower of this.towers) {
         if (tower === aura) continue;
         if (distanceBetween(aura.x, aura.y, tower.x, tower.y) <= aura.getRange()) {
-          if (aura.config.special === 'aura_attack') tower.setAuraBuff(Math.floor(tower.getDamage() * 0.2), tower.auraSpeedBonus);
-          else tower.setAuraBuff(tower.auraDamageBonus, Math.floor(tower.getAttackSpeed() * 0.2));
+          if (aura.config.special === 'aura_attack') {
+            tower.addAuraBuff(Math.floor(tower.config.damage * 0.2 * (1 + aura.level * 0.1)), 0);
+          } else {
+            tower.addAuraBuff(0, Math.floor(tower.config.attackSpeed * 0.2 * (1 + aura.level * 0.1)));
+          }
         }
       }
     }
@@ -828,9 +839,9 @@ export class Game {
       <p>⚔️${h.getDamage()} ⏱${(h.getAttackSpeed()/1000).toFixed(2)}s 🎯${h.getRange()}</p>
       <p>💀${h.killCount} | EXP:${h.experience}/${h.expToNextLevel}</p>
       ${h.freePoints > 0 ? `<div style="display:flex;gap:4px;margin:4px 0;">
-        <button onclick="window.__game?.heroTower?.addStr()" style="pointer-events:auto;padding:2px 8px;background:#333;border:1px solid #F44;color:#F44;cursor:pointer;border-radius:2px;font-size:9px;">+力</button>
-        <button onclick="window.__game?.heroTower?.addAgi()" style="pointer-events:auto;padding:2px 8px;background:#333;border:1px solid #4F4;color:#4F4;cursor:pointer;border-radius:2px;font-size:9px;">+敏</button>
-        <button onclick="window.__game?.heroTower?.addInt()" style="pointer-events:auto;padding:2px 8px;background:#333;border:1px solid #44F;color:#44F;cursor:pointer;border-radius:2px;font-size:9px;">+智</button>
+        <button onclick="window.__game?.heroTower?.addStr();window.__game?.showHeroInfo()" style="pointer-events:auto;padding:2px 8px;background:#333;border:1px solid #F44;color:#F44;cursor:pointer;border-radius:2px;font-size:9px;">+力</button>
+        <button onclick="window.__game?.heroTower?.addAgi();window.__game?.showHeroInfo()" style="pointer-events:auto;padding:2px 8px;background:#333;border:1px solid #4F4;color:#4F4;cursor:pointer;border-radius:2px;font-size:9px;">+敏</button>
+        <button onclick="window.__game?.heroTower?.addInt();window.__game?.showHeroInfo()" style="pointer-events:auto;padding:2px 8px;background:#333;border:1px solid #44F;color:#44F;cursor:pointer;border-radius:2px;font-size:9px;">+智</button>
       </div>` : ''}
       <div style="border-top:1px solid #333;margin-top:6px;padding-top:4px;">
         ${h.config.skills.map((s, i) => {
@@ -988,16 +999,15 @@ export class Game {
   // ======================= B6: 小地图 =======================
 
   private updateMinimap(): void {
-    let canvas = this.uiRoot.querySelector('#minimap') as HTMLCanvasElement;
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvas.id = 'minimap';
-      canvas.width = 160;
-      canvas.height = 90;
-      canvas.style.cssText = 'position:absolute;bottom:135px;right:5px;border:1px solid #44FF44;border-radius:4px;background:rgba(0,0,0,0.6);z-index:15;';
-      this.uiRoot.appendChild(canvas);
+    if (!this.minimapCanvas) {
+      this.minimapCanvas = document.createElement('canvas');
+      this.minimapCanvas.id = 'minimap';
+      this.minimapCanvas.width = 160;
+      this.minimapCanvas.height = 90;
+      this.minimapCanvas.style.cssText = 'position:absolute;bottom:135px;right:5px;border:1px solid #44FF44;border-radius:4px;background:rgba(0,0,0,0.6);z-index:15;';
+      this.uiRoot.appendChild(this.minimapCanvas);
     }
-    const ctx = canvas.getContext('2d');
+    const ctx = this.minimapCanvas.getContext('2d');
     if (!ctx) return;
 
     const scaleX = 160 / GAME_WIDTH;

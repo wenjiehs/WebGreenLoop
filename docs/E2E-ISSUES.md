@@ -229,13 +229,15 @@
 | **E2E 有问题** | **8/79** | 需修复 |
 
 ### 修复优先级排序
-1. **BUG-001** — gameLoop return 跳过渲染（画面卡死）
-2. **BUG-002** — 光环不叠加
-3. **BUG-003** — 防空塔满级仍不打地面
-4. **BUG-004** — 淘汰模式/地狱规则空分支
-5. **BUG-005** — enemiesAlive 不减
-6. **BUG-006** — S键误卖塔
-7. **MISS-001** — 英雄塔攻击动画
-8. **MISS-002** — 属性加点 UI 不刷新
-9. **MISS-003** — 英雄移动后不刷新
-10. **MISS-005** — 重启地形叠加
+1. **BUG-001** — gameLoop return 跳过渲染（画面卡死）— ✅ 已修复
+2. **BUG-002** — 光环不叠加 — ✅ 已修复（addAuraBuff 累加）
+3. **BUG-003** — 防空塔满级仍不打地面 — ✅ 已修复（level < upgrades.length）
+4. **BUG-004** — 淘汰模式/地狱规则空分支 — ✅ 已修复（简单模式直接胜利）
+5. **BUG-005** — enemiesAlive 不减 — ✅ 确认无实际 Bug（所有路径都经过 onDeath）
+6. **BUG-006** — S键误卖塔 — ✅ 已修复（检查 heroTower.isSelected）
+7. **MISS-001** — 英雄塔攻击动画 — ✅ 已修复（justFired + syncHero 弹跳）
+8. **MISS-002** — 属性加点 UI 不刷新 — ✅ 已修复（onclick 加 showHeroInfo）
+9. **MISS-003** — 英雄移动后不刷新 — ✅ 已修复（clearSelection + showSelection + showHeroInfo）
+10. **MISS-005** — 重启地形叠加 — ✅ 已修复（reset 移除 terrainGroup）
+11. **MISS-006** — minimap 每帧 querySelector — ✅ 已修复（缓存引用）
+12. **IMP-002** — 弹道命中半径过大 — ✅ 已修复（40→22）

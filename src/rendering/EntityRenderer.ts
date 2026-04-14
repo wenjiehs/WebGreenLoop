@@ -23,7 +23,7 @@ export class EntityRenderer {
 
   private towerSyncs: Map<TowerLogic, TowerSync> = new Map();
   private enemySyncs: Map<EnemyLogic, EnemySync> = new Map();
-  private heroSync: { hero: HeroTowerLogic; model: THREE.Group } | null = null;
+  private heroSync: { hero: HeroTowerLogic; model: THREE.Group; attackAnim: number } | null = null;
 
   private towerGroup = new THREE.Group();
   private enemyGroup = new THREE.Group();
@@ -36,6 +36,8 @@ export class EntityRenderer {
   private buildPreview: THREE.Group | null = null;
   // 地形
   private terrainBuilt = false;
+  private terrainGroup: THREE.Group | null = null;
+  private spawnPillar: THREE.Mesh | null = null;
 
   constructor(renderer: ThreeRenderer) {
     this.renderer = renderer;
@@ -50,6 +52,7 @@ export class EntityRenderer {
     this.terrainBuilt = true;
     const terrain = new TerrainBuilder(this.renderer).build(pathManager.getPathTiles());
     this.renderer.scene.add(terrain);
+    this.terrainGroup = terrain;
 
     // 出生点标记
     const spawn = pathManager.getSpawnPoint();
@@ -60,6 +63,7 @@ export class EntityRenderer {
     );
     pillar.position.set(pos.x, 0.6, pos.z);
     this.renderer.scene.add(pillar);
+    this.spawnPillar = pillar;
   }
 
   sync(towers: TowerLogic[], enemies: EnemyLogic[], heroTower: HeroTowerLogic | null, time: number): void {
@@ -207,13 +211,27 @@ export class EntityRenderer {
       const pos = ThreeRenderer.toWorld(heroTower.x, heroTower.y, 0);
       model.position.set(pos.x, 0, pos.z);
       this.towerGroup.add(model);
-      this.heroSync = { hero: heroTower, model };
+      this.heroSync = { hero: heroTower, model, attackAnim: 0 };
     } else {
       const pos = ThreeRenderer.toWorld(heroTower.x, heroTower.y, 0);
       this.heroSync.model.position.x += (pos.x - this.heroSync.model.position.x) * 0.2;
       this.heroSync.model.position.z += (pos.z - this.heroSync.model.position.z) * 0.2;
       const core = this.heroSync.model.getObjectByName('heroCore');
       if (core) core.rotation.y += 0.015;
+
+      // 英雄攻击弹跳动画
+      if (heroTower.justFired) {
+        this.heroSync.attackAnim = 1.0;
+        heroTower.justFired = false;
+      }
+      if (this.heroSync.attackAnim > 0) {
+        this.heroSync.attackAnim -= 0.08;
+        if (this.heroSync.attackAnim < 0) this.heroSync.attackAnim = 0;
+        const bounce = Math.sin(this.heroSync.attackAnim * Math.PI) * 0.1;
+        this.heroSync.model.position.y = bounce;
+      } else {
+        this.heroSync.model.position.y = 0;
+      }
     }
   }
 
@@ -381,6 +399,9 @@ export class EntityRenderer {
     this.towerSyncs.clear(); this.enemySyncs.clear(); this.heroSync = null;
     this.clearSelection(); this.clearBuildPreview();
     [this.towerGroup, this.enemyGroup, this.effectGroup].forEach(g => { while (g.children.length) g.remove(g.children[0]); });
+    // MISS-005: 移除旧地形
+    if (this.terrainGroup) { this.renderer.scene.remove(this.terrainGroup); this.terrainGroup = null; }
+    if (this.spawnPillar) { this.renderer.scene.remove(this.spawnPillar); this.spawnPillar = null; }
     this.terrainBuilt = false;
   }
 

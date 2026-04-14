@@ -66,6 +66,7 @@ export class TowerLogic {
   getHeroLevel(): number { return this.heroLevel; }
 
   setAuraBuff(dmg: number, spd: number): void { this.auraDamageBonus = dmg; this.auraSpeedBonus = spd; }
+  addAuraBuff(dmg: number, spd: number): void { this.auraDamageBonus += dmg; this.auraSpeedBonus += spd; }
   setEnemies(enemies: EnemyLogic[]): void { this.enemies = enemies; }
 
   upgrade(): { cost: number } | null {
@@ -127,7 +128,7 @@ export class TowerLogic {
     if (enemy.isDying() || !enemy.active) return false;
     if (enemy.isInvisible() && !enemy.isRevealed() && this.config.special !== 'detect') return false;
     if (enemy.isFlying() && this.config.special !== 'antiair' && this.config.special !== 'freeze_aura' && this.config.category !== 'support') return false;
-    if (this.config.special === 'antiair' && this.level < 4 && !enemy.isFlying()) return false;
+    if (this.config.special === 'antiair' && this.level < this.config.upgrades.length && !enemy.isFlying()) return false;
     return true;
   }
 

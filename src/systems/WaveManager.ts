@@ -98,9 +98,11 @@ export class WaveManager {
           this.waitingForNextWave = true;
           this.waveTimer = 0;
         } else {
-          // B3: 地狱难度无条件进隐藏关；普通/困难需要通关才进
-          if (this.difficulty === 'hell') {
-            this.startHiddenMode();
+          // 50波通关后：淘汰模式直接胜利，其他难度进隐藏关
+          if (this.difficulty === 'easy') {
+            // 淘汰/简单模式：不进隐藏关，直接胜利
+            this.allWavesComplete = true;
+            this.events.onAllWavesComplete();
           } else {
             this.startHiddenMode();
           }

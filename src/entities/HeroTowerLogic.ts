@@ -32,6 +32,7 @@ export class HeroTowerLogic {
   currentSplash: number = 0;
   private attackTimer: number = 0;
   killCount: number = 0;
+  justFired: boolean = false; // C3: 攻击动画触发标记
   critChance: number = 0;
   critMultiplier: number = 1.5;
   private tempAtkSpeedBonus: number = 0;
@@ -224,6 +225,7 @@ export class HeroTowerLogic {
   }
 
   private fireAt(target: EnemyLogic): void {
+    this.justFired = true; // C3: 攻击动画
     const isCrit = this.critChance > 0 && Math.random() < this.critChance;
     let damage = this.currentDamage;
     if (isCrit) damage = Math.floor(damage * this.critMultiplier);

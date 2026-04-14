@@ -4,15 +4,18 @@ import { TerrainBuilder } from '../rendering/TerrainBuilder';
 import { TowerModelFactory } from '../rendering/TowerModelFactory';
 import { EnemyModelFactory } from '../rendering/EnemyModelFactory';
 import { HeroModelFactory } from '../rendering/HeroModelFactory';
+import { SummonModelFactory } from '../rendering/SummonModelFactory';
 import { EffectsSystem } from '../rendering/EffectsSystem';
 import { TowerLogic } from '../entities/TowerLogic';
 import { EnemyLogic } from '../entities/EnemyLogic';
 import { HeroTowerLogic } from '../entities/HeroTowerLogic';
+import { SummonLogic } from '../entities/SummonLogic';
 import { PathManager } from '../systems/PathManager';
 import { TILE_SIZE } from '../utils/constants';
 
 interface TowerSync { tower: TowerLogic; model: THREE.Group; lastLevel: number; attackAnim: number; }
 interface EnemySync { enemy: EnemyLogic; model: THREE.Group; walkPhase: number; lastX: number; lastZ: number; }
+interface SummonSync { summon: SummonLogic; model: THREE.Group; attackAnim: number; }
 
 /**
  * 3D 实体渲染器 — 直接从纯逻辑实体读取状态驱动 3D 渲染
@@ -24,6 +27,7 @@ export class EntityRenderer {
 
   private towerSyncs: Map<TowerLogic, TowerSync> = new Map();
   private enemySyncs: Map<EnemyLogic, EnemySync> = new Map();
+  private summonSyncs: Map<SummonLogic, SummonSync> = new Map();
   private heroSync: { hero: HeroTowerLogic; model: THREE.Group; attackAnim: number } | null = null;
 
   private towerGroup = new THREE.Group();
@@ -104,6 +108,8 @@ export class EntityRenderer {
     this.syncTowers(towers);
     this.syncEnemies(enemies, time);
     this.syncHero(heroTower);
+    this.syncSummons(heroTower);
+    this.effects.update();
     this.effects.update();
     this.renderer.render();
   }
@@ -256,6 +262,55 @@ export class EntityRenderer {
       } else {
         this.heroSync.model.position.y = 0;
       }
+    }
+  }
+
+  // ===== 召唤物 =====
+  private syncSummons(heroTower: HeroTowerLogic | null): void {
+    const summons = heroTower?.summons || [];
+
+    // 新增
+    for (const summon of summons) {
+      if (!this.summonSyncs.has(summon)) {
+        const model = SummonModelFactory.create(summon.config);
+        model.scale.setScalar(2.2);
+        const pos = ThreeRenderer.toWorld(summon.x, summon.y, 0);
+        model.position.set(pos.x, 0, pos.z);
+        this.towerGroup.add(model);
+        this.summonSyncs.set(summon, { summon, model, attackAnim: 0 });
+      }
+    }
+
+    // 同步/移除
+    for (const [summon, sync] of this.summonSyncs) {
+      if (!summon.active || !summons.includes(summon)) {
+        // 消散效果
+        this.spawnDeathEffect(sync.model.position.clone(), summon.config.color, false);
+        this.towerGroup.remove(sync.model);
+        this.summonSyncs.delete(summon);
+        continue;
+      }
+
+      // 攻击弹跳
+      if (summon.justFired) {
+        sync.attackAnim = 1.0;
+        summon.justFired = false;
+      }
+      if (sync.attackAnim > 0) {
+        sync.attackAnim -= 0.05;
+        if (sync.attackAnim < 0) sync.attackAnim = 0;
+        const bounce = Math.sin(sync.attackAnim * Math.PI) * 0.1;
+        sync.model.position.y = bounce;
+      } else {
+        sync.model.position.y = 0;
+      }
+
+      // 浮动动画
+      const t = performance.now() * 0.002;
+      const core = sync.model.getObjectByName('summonCore');
+      if (core) { core.position.y += Math.sin(t) * 0.001; core.rotation.y = t * 0.3; }
+      const aura = sync.model.getObjectByName('summonAura');
+      if (aura) aura.scale.setScalar(1 + Math.sin(t * 1.5) * 0.08);
     }
   }
 
@@ -422,7 +477,7 @@ export class EntityRenderer {
   }
 
   reset(): void {
-    this.towerSyncs.clear(); this.enemySyncs.clear(); this.heroSync = null;
+    this.towerSyncs.clear(); this.enemySyncs.clear(); this.summonSyncs.clear(); this.heroSync = null;
     this.clearSelection(); this.clearBuildPreview();
     [this.towerGroup, this.enemyGroup, this.effectGroup].forEach(g => { while (g.children.length) g.remove(g.children[0]); });
     // MISS-005: 移除旧地形

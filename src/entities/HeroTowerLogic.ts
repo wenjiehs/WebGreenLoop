@@ -3,6 +3,7 @@ import { distanceBetween } from '../utils/helpers';
 import { HeroTowerConfig, HeroSkill } from '../config/heroTowers';
 import { EnemyLogic } from './EnemyLogic';
 import { ProjectileLogic } from './ProjectileLogic';
+import { SummonLogic, SUMMON_CONFIGS, SummonType } from './SummonLogic';
 
 interface ActiveSkillState { skill: HeroSkill; level: number; cdTimer: number; buffTimer: number; }
 
@@ -40,11 +41,13 @@ export class HeroTowerLogic {
 
   private enemies: EnemyLogic[] = [];
   projectiles: ProjectileLogic[] = [];
+  summons: SummonLogic[] = [];
   private lastTarget: EnemyLogic | null = null;
 
   onProjectileHit?: (x: number, y: number, damage: number, splash: number, attackType: string, special?: string) => void;
   onLevelUp?: (hero: HeroTowerLogic) => void;
   onFireProjectile?: (fx: number, fy: number, tx: number, ty: number, color: number, isAOE: boolean) => void;
+  onSummonCreated?: (summon: SummonLogic) => void;
 
   constructor(config: HeroTowerConfig, col: number, row: number) {
     this.config = config;
@@ -175,7 +178,7 @@ export class HeroTowerLogic {
         case 'multishot': this.currentDamage += Math.floor(scaling * 0.1); break;
         case 'dot': this.currentDamage += Math.floor(val * 0.15); break;
         case 'armor_reduce': this.currentDamage += Math.floor(val * 1.5); break;
-        case 'summon': this.currentDamage += Math.floor(val * 5 + scaling * 0.1); break;
+        case 'summon': /* 召唤物由 applyPassiveEffects 管理，不在此加伤害 */ break;
       }
     }
 
@@ -205,6 +208,14 @@ export class HeroTowerLogic {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       if (this.projectiles[i].active) this.projectiles[i].update(delta);
       else this.projectiles.splice(i, 1);
+    }
+
+    // 更新召唤物
+    for (let i = this.summons.length - 1; i >= 0; i--) {
+      const s = this.summons[i];
+      s.setEnemies(this.enemies);
+      s.update(delta);
+      if (!s.active) this.summons.splice(i, 1);
     }
 
     this.applyPassiveEffects();
@@ -317,14 +328,59 @@ export class HeroTowerLogic {
 
   private applyPassiveEffects(): void {
     for (const ls of this.learnedSkills) {
-      if (ls.skill.isActive || ls.skill.effect.type !== 'passive_aura') continue;
-      const val = ls.skill.effect.baseValue + ls.skill.effect.perLevel * (ls.level - 1);
-      for (const e of this.enemies) {
-        if (e.isDying() || !e.active) continue;
-        if (distanceBetween(this.x, this.y, e.x, e.y) <= this.currentRange) e.applySlow(val, 500);
+      if (ls.skill.isActive) continue;
+
+      if (ls.skill.effect.type === 'passive_aura') {
+        const val = ls.skill.effect.baseValue + ls.skill.effect.perLevel * (ls.level - 1);
+        for (const e of this.enemies) {
+          if (e.isDying() || !e.active) continue;
+          if (distanceBetween(this.x, this.y, e.x, e.y) <= this.currentRange) e.applySlow(val, 500);
+        }
+      }
+
+      // 召唤类被动——自动维持召唤物数量
+      if (ls.skill.effect.type === 'summon') {
+        const summonType = this.getSummonTypeForSkill(ls.skill.id);
+        if (!summonType) continue;
+        const maxCount = Math.min(3, 1 + Math.floor((ls.level - 1) / 2)); // 1级1个, 3级2个, 5级3个
+        const currentCount = this.summons.filter(s => s.config.type === summonType && s.active).length;
+        if (currentCount < maxCount) {
+          this.spawnSummon(summonType, ls.level);
+        }
       }
     }
   }
 
-  destroy(): void { this.active = false; this.projectiles = []; }
+  private getSummonTypeForSkill(skillId: string): SummonType | null {
+    switch (skillId) {
+      case 'summon_water': return 'water_elemental';
+      case 'summon_hawk': return 'hawk';
+      case 'summon_bear': return 'bear';
+      case 'summon_imp': return 'imp';
+      default: return null;
+    }
+  }
+
+  private spawnSummon(type: SummonType, level: number): void {
+    const config = SUMMON_CONFIGS[type];
+    // 放在英雄身旁随机位置
+    const angle = Math.random() * Math.PI * 2;
+    const dist = TILE_SIZE * 1.2;
+    const sx = this.x + Math.cos(angle) * dist;
+    const sy = this.y + Math.sin(angle) * dist;
+
+    const summon = new SummonLogic(config, level, sx, sy);
+    summon.setEnemies(this.enemies);
+    summon.onProjectileHit = (x, y, dmg, sp, at) => this.onProjectileHit?.(x, y, dmg, sp, at);
+    summon.onFireProjectile = (fx, fy, tx, ty, c, aoe) => this.onFireProjectile?.(fx, fy, tx, ty, c, aoe);
+    this.summons.push(summon);
+    this.onSummonCreated?.(summon);
+  }
+
+  destroy(): void {
+    this.active = false;
+    this.projectiles = [];
+    this.summons.forEach(s => { s.active = false; });
+    this.summons = [];
+  }
 }

@@ -13,15 +13,12 @@ const WORLD_W = GAME_WIDTH * SCALE;   // 64
 const WORLD_H = MAP_H * SCALE;        // 29
 
 /**
- * Three.js 渲染器
- * 关键数学：
- * - Phaser 地图区域: 1280 x 580 像素
- * - 3D 世界: 64 x 29 世界单位 (SCALE=0.05)
- * - 摄像机 frustum 必须 >= 64 宽才能看到整个地图
+ * Three.js 渲染器 — 透视摄像机版本
+ * 透视摄像机 = 近大远小 = 真正的纵深感
  */
 export class ThreeRenderer {
   scene: THREE.Scene;
-  camera: THREE.OrthographicCamera;
+  camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   private composer: EffectComposer;
 
@@ -29,7 +26,8 @@ export class ThreeRenderer {
   private cameraTarget = new THREE.Vector3(0, 0, 0);
   private cameraZoom = 1;
   private targetZoom = 1;
-  private baseFrustum = WORLD_W * 1.05; // 紧凑视角，地图占满更多画面
+  // 基础距离 — 摄像机到目标的距离，控制能看到多大范围
+  private baseDistance = 42;
 
   // 时间
   private clock = new THREE.Clock();
@@ -37,21 +35,17 @@ export class ThreeRenderer {
 
   constructor(container: HTMLElement) {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87CEEB); // 天空蓝
-    this.scene.fog = new THREE.FogExp2(0x88BBAA, 0.0015); // 淡绿雾，很远处才明显
+    // 天空渐变色（顶部蓝 → 底部浅蓝白）
+    this.scene.background = new THREE.Color(0x7EC8E3);
+    this.scene.fog = new THREE.Fog(0xBBDDCC, 30, 80); // 线性雾：远处渐隐
 
     const renderW = GAME_WIDTH;
     const renderH = GAME_HEIGHT;
     const aspect = renderW / renderH;
 
-    // Camera — frustum 紧凑贴合地图
-    this.camera = new THREE.OrthographicCamera(
-      -this.baseFrustum * aspect / 2, this.baseFrustum * aspect / 2,
-      this.baseFrustum / 2, -this.baseFrustum / 2,
-      0.1, 500,
-    );
-    // 约 55° 俯视 — 更陡一点，看到更多地面
-    this.camera.position.set(25, 55, 35);
+    // 透视摄像机 — FOV=45° 是经典 RTS 角度
+    this.camera = new THREE.PerspectiveCamera(45, aspect, 0.5, 200);
+    this.camera.position.set(0, 35, 28);
     this.camera.lookAt(0, 0, 0);
 
     // Renderer
@@ -61,14 +55,14 @@ export class ThreeRenderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.5;
+    this.renderer.toneMappingExposure = 1.4;
     container.appendChild(this.renderer.domElement);
 
-    // 后处理 — 只用 Bloom，跳过 FXAA（兼容性问题）
+    // 后处理
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(new UnrealBloomPass(
-      new THREE.Vector2(renderW, renderH), 0.3, 0.4, 0.9,
+      new THREE.Vector2(renderW, renderH), 0.25, 0.4, 0.92,
     ));
 
     this.setupLights();
@@ -76,43 +70,41 @@ export class ThreeRenderer {
   }
 
   private setupLights(): void {
-    // 明亮太阳光 — 温暖的午后阳光
-    const sun = new THREE.DirectionalLight(0xFFF5E0, 2.5);
-    sun.position.set(30, 50, 20);
+    // 主太阳光 — 温暖午后
+    const sun = new THREE.DirectionalLight(0xFFF5E0, 2.2);
+    sun.position.set(25, 45, 15);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    const shadowCam = sun.shadow.camera;
-    shadowCam.near = 0.5; shadowCam.far = 150;
-    shadowCam.left = -50; shadowCam.right = 50;
-    shadowCam.top = 50; shadowCam.bottom = -50;
+    const sc = sun.shadow.camera;
+    sc.near = 0.5; sc.far = 120;
+    sc.left = -50; sc.right = 50;
+    sc.top = 50; sc.bottom = -50;
     sun.shadow.bias = -0.0003;
     this.scene.add(sun);
 
-    // 更亮的环境光
-    this.scene.add(new THREE.AmbientLight(0x8899AA, 0.8));
-    // 天空蓝 + 地面绿 半球光
-    this.scene.add(new THREE.HemisphereLight(0x99CCFF, 0x558833, 0.6));
+    // 环境光
+    this.scene.add(new THREE.AmbientLight(0x8899AA, 0.7));
+    // 半球光（天空蓝 + 地面绿）
+    this.scene.add(new THREE.HemisphereLight(0x99CCFF, 0x558833, 0.5));
 
-    // 补光
-    const fill = new THREE.DirectionalLight(0xAABBDD, 0.3);
-    fill.position.set(-20, 30, -15);
+    // 补光（从对面）
+    const fill = new THREE.DirectionalLight(0xAABBDD, 0.25);
+    fill.position.set(-20, 25, -15);
     this.scene.add(fill);
   }
 
   private setupCameraControls(_canvas: HTMLElement): void {
-    // 事件由 main.ts 统一转发，不再直接监听 canvas
+    // 事件由 Game.ts 转发
   }
 
-  /** 由 main.ts 事件转发调用 — 拖拽3D摄像机 */
   handleDrag(dx: number, dy: number): void {
-    const speed = 0.08 / this.cameraZoom;
+    const speed = 0.06 / this.cameraZoom;
     this.cameraTarget.x -= dx * speed;
     this.cameraTarget.z -= dy * speed;
   }
 
-  /** 由 main.ts 事件转发调用 — 缩放3D摄像机 */
   handleZoom(deltaY: number): void {
-    this.targetZoom = Math.max(0.5, Math.min(3.0, this.targetZoom + deltaY * 0.001));
+    this.targetZoom = Math.max(0.6, Math.min(2.5, this.targetZoom + deltaY * 0.001));
   }
 
   focusOn(px: number, py: number): void {
@@ -128,19 +120,17 @@ export class ThreeRenderer {
   }
 
   private updateCamera(): void {
-    const frustum = this.baseFrustum / this.cameraZoom;
-    const aspect = GAME_WIDTH / GAME_HEIGHT;
-    this.camera.left = -frustum * aspect / 2;
-    this.camera.right = frustum * aspect / 2;
-    this.camera.top = frustum / 2;
-    this.camera.bottom = -frustum / 2;
+    const d = this.baseDistance / this.cameraZoom;
 
-    // 约 55° 俯视角（更陡 = 看到更多地面）
-    const d = 55 / this.cameraZoom;
+    // 经典 RTS 45° 俯视角 — 摄像机在目标的后上方
+    // 角度约 50°（tan50°≈1.19，即 y/z ≈ 1.19）
+    const camY = d * 0.82;   // 高度
+    const camZ = d * 0.65;   // 后退距离
+
     this.camera.position.set(
-      this.cameraTarget.x + d * 0.35,
-      d,
-      this.cameraTarget.z + d * 0.55,
+      this.cameraTarget.x,
+      camY,
+      this.cameraTarget.z + camZ,
     );
     this.camera.lookAt(this.cameraTarget);
     this.camera.updateProjectionMatrix();
@@ -149,7 +139,7 @@ export class ThreeRenderer {
   getTime(): number { return this.elapsed; }
   dispose(): void { this.renderer.dispose(); }
 
-  /** Phaser 像素坐标 → 3D 世界坐标 */
+  /** 像素坐标 → 3D 世界坐标 */
   static toWorld(px: number, py: number, elevation: number = 0): THREE.Vector3 {
     return new THREE.Vector3(
       (px - GAME_WIDTH / 2) * SCALE,

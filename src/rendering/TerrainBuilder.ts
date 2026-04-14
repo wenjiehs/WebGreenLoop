@@ -32,9 +32,9 @@ export class TerrainBuilder {
     const pos = grassGeo.getAttribute('position');
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i); const z = pos.getZ(i);
-      const noise = Math.sin(x * 2.5) * Math.cos(z * 3.1) * 0.06
-        + Math.sin(x * 5.7 + 1.3) * Math.cos(z * 4.2 - 0.7) * 0.03
-        + Math.sin(x * 11 + 2.5) * Math.cos(z * 9.3) * 0.01;
+      const noise = Math.sin(x * 1.5) * Math.cos(z * 2.0) * 0.15
+        + Math.sin(x * 3.5 + 1.3) * Math.cos(z * 2.8 - 0.7) * 0.06
+        + Math.sin(x * 7 + 2.5) * Math.cos(z * 6.3) * 0.02;
       pos.setY(i, noise);
     }
     grassGeo.computeVertexNormals();
@@ -66,9 +66,9 @@ export class TerrainBuilder {
     const tiles = Array.from(pathTiles);
     const dummy = new THREE.Object3D();
 
-    // 路面（稍微凸起）
+    // 路面（凹陷到地面以下 — 像挖出来的路）
     const pathMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(ts * 0.97, 0.08, ts * 0.97),
+      new THREE.BoxGeometry(ts * 0.97, 0.12, ts * 0.97),
       new THREE.MeshLambertMaterial({ color: 0x9b8365 }),
       tiles.length,
     );
@@ -76,7 +76,7 @@ export class TerrainBuilder {
 
     tiles.forEach((key, i) => {
       const [c, r] = key.split(',').map(Number);
-      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0.04);
+      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, -0.03);
       dummy.position.copy(p);
       dummy.updateMatrix();
       pathMesh.setMatrixAt(i, dummy.matrix);
@@ -114,9 +114,9 @@ export class TerrainBuilder {
 
     if (edgeTiles.length === 0) return;
 
-    // 路沿石（比路面稍高）
+    // 路沿石（高于路面，形成明显边框）
     const borderMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(ts * 1.02, 0.14, ts * 1.02),
+      new THREE.BoxGeometry(ts * 1.02, 0.2, ts * 1.02),
       new THREE.MeshLambertMaterial({ color: 0x6a5a42 }),
       edgeTiles.length,
     );
@@ -125,7 +125,7 @@ export class TerrainBuilder {
 
     edgeTiles.forEach((key, i) => {
       const [c, r] = key.split(',').map(Number);
-      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0.07);
+      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0.1);
       dummy.position.copy(p);
       dummy.updateMatrix();
       borderMesh.setMatrixAt(i, dummy.matrix);

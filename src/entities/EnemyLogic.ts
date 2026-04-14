@@ -47,8 +47,8 @@ export class EnemyLogic {
     this.y = spawn.y;
     this.maxHp = Math.floor(config.hp * waveMultiplier);
     this.hp = this.maxHp;
-    this.baseSpeed = config.speed;
-    this.speed = config.speed;
+    this.baseSpeed = config.speed * 0.65; // 降低移动速度，让攻击效果看得清
+    this.speed = this.baseSpeed;
   }
 
   // Getters

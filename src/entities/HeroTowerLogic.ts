@@ -179,7 +179,7 @@ export class HeroTowerLogic {
       }
     }
 
-    this.currentAttackSpeed = Math.max(200, this.config.baseAttackSpeed - this.agi * 2.5 - this.tempAtkSpeedBonus);
+    this.currentAttackSpeed = Math.max(450, this.config.baseAttackSpeed - this.agi * 2.0 - this.tempAtkSpeedBonus);
     this.currentRange = this.config.baseRange + Math.floor(this.int * 0.25);
     this.currentDamage += this.tempDamageBonus;
   }

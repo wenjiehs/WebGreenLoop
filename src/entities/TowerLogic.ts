@@ -103,7 +103,7 @@ export class TowerLogic {
         baseRange = this.config.upgrades[this.level - 1].range;
       }
       this.currentDamage = Math.floor(baseDmg * growBonus);
-      this.currentAttackSpeed = Math.max(200, baseAS - (this.heroLevel - 1) * 15);
+      this.currentAttackSpeed = Math.max(400, baseAS - (this.heroLevel - 1) * 10);
       this.currentRange = baseRange + (this.heroLevel - 1) * 3;
     }
   }

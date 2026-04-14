@@ -204,15 +204,15 @@ export class EntityRenderer {
       const core = this.heroSync.model.getObjectByName('heroCore');
       if (core) core.rotation.y += 0.015;
 
-      // 英雄攻击弹跳动画
+      // 英雄攻击弹跳动画（持续更长）
       if (heroTower.justFired) {
         this.heroSync.attackAnim = 1.0;
         heroTower.justFired = false;
       }
       if (this.heroSync.attackAnim > 0) {
-        this.heroSync.attackAnim -= 0.08;
+        this.heroSync.attackAnim -= 0.04; // 衰减更慢
         if (this.heroSync.attackAnim < 0) this.heroSync.attackAnim = 0;
-        const bounce = Math.sin(this.heroSync.attackAnim * Math.PI) * 0.1;
+        const bounce = Math.sin(this.heroSync.attackAnim * Math.PI) * 0.15;
         this.heroSync.model.position.y = bounce;
       } else {
         this.heroSync.model.position.y = 0;
@@ -224,7 +224,7 @@ export class EntityRenderer {
   spawnProjectile(fromX: number, fromY: number, toX: number, toY: number, color: number, isAOE: boolean): void {
     const from = ThreeRenderer.toWorld(fromX, fromY, 0.3);
     const to = ThreeRenderer.toWorld(toX, toY, 0.12);
-    const size = isAOE ? 0.06 : 0.04;
+    const size = isAOE ? 0.09 : 0.06; // 弹道更大更可见
     const proj = new THREE.Mesh(
       isAOE ? new THREE.SphereGeometry(size, 5, 4) : new THREE.ConeGeometry(size * 0.5, size * 2, 4),
       new THREE.MeshBasicMaterial({ color }),
@@ -233,21 +233,22 @@ export class EntityRenderer {
     this.renderer.scene.add(proj);
     if (!isAOE) { proj.lookAt(to); proj.rotateX(Math.PI / 2); }
 
-    const duration = 180;
+    const duration = 350; // 弹道飞行时间(ms)
     const start = performance.now();
     const trail: THREE.Mesh[] = [];
     const animate = () => {
       const t = Math.min(1, (performance.now() - start) / duration);
       proj.position.lerpVectors(from, to, t);
-      proj.position.y += Math.sin(t * Math.PI) * (isAOE ? 0.4 : 0.2);
-      if (t < 0.95 && trail.length < 6) {
-        const tp = new THREE.Mesh(new THREE.SphereGeometry(0.012, 3, 2), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4 }));
+      proj.position.y += Math.sin(t * Math.PI) * (isAOE ? 0.6 : 0.35); // 弧线更高
+      // 更多拖尾粒子
+      if (t < 0.95 && trail.length < 10) {
+        const tp = new THREE.Mesh(new THREE.SphereGeometry(0.018, 4, 3), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 }));
         tp.position.copy(proj.position);
         this.renderer.scene.add(tp);
         trail.push(tp);
       }
       trail.forEach(tp => {
-        (tp.material as THREE.MeshBasicMaterial).opacity -= 0.08;
+        (tp.material as THREE.MeshBasicMaterial).opacity -= 0.05; // 拖尾消失更慢
         if ((tp.material as THREE.MeshBasicMaterial).opacity <= 0) { this.renderer.scene.remove(tp); tp.geometry.dispose(); (tp.material as THREE.Material).dispose(); }
       });
       if (t >= 1) {

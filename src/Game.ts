@@ -1,4 +1,4 @@
-import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE, AttackType, MAX_ENEMIES_ON_MAP } from './utils/constants';
+import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE, GRID_COLS, AttackType, MAX_ENEMIES_ON_MAP } from './utils/constants';
 import { calculateDamage, distanceBetween } from './utils/helpers';
 import { ThreeRenderer } from './rendering/ThreeRenderer';
 import { EntityRenderer } from './rendering/EntityRenderer';
@@ -376,8 +376,20 @@ export class Game {
   }
 
   private selectHero(heroConfig: HeroTowerConfig): void {
-    let bestCol = 5, bestRow = 5;
-    for (let r = 2; r < 8; r++) { for (let c = 2; c < 8; c++) { if (this.gridManager.canBuildAt(c, r)) { bestCol = c; bestRow = r; break; } } if (this.gridManager.canBuildAt(bestCol, bestRow)) break; }
+    // 从地图中央向外螺旋搜索第一个可建造位置
+    const centerCol = Math.floor(GRID_COLS / 2);
+    const centerRow = Math.floor((GAME_HEIGHT - 140) / TILE_SIZE / 2);
+    let bestCol = centerCol, bestRow = centerRow;
+    let found = false;
+    for (let radius = 0; radius < 20 && !found; radius++) {
+      for (let dc = -radius; dc <= radius && !found; dc++) {
+        for (let dr = -radius; dr <= radius && !found; dr++) {
+          if (Math.abs(dc) !== radius && Math.abs(dr) !== radius) continue; // 只检查当前圈
+          const c = centerCol + dc, r = centerRow + dr;
+          if (this.gridManager.canBuildAt(c, r)) { bestCol = c; bestRow = r; found = true; }
+        }
+      }
+    }
 
     this.gridManager.occupy(bestCol, bestRow);
     this.economyManager.addPopulation();

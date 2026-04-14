@@ -56,20 +56,19 @@ export class TerrainBuilder {
     const grass = new THREE.Mesh(grassGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
     grass.rotation.x = -Math.PI / 2;
     grass.receiveShadow = true;
-    grass.position.y = -0.02;
+    grass.position.y = 0.08; // 草地平面高于路面(y=-0.15)，形成自然高台
     this.group.add(grass);
   }
 
-  /** 路面 — 深沟壑底部 */
+  /** 路面 — 凹下去的石砖路 */
   private buildPath(pathTiles: Set<string>): void {
     const ts = TILE_SIZE * ThreeRenderer.SCALE;
     const tiles = Array.from(pathTiles);
     const dummy = new THREE.Object3D();
-    const DEPTH = 0.4; // 沟壑深度
 
-    // 路面底部
+    // 所有路径格子的路面底部（在草地平面以下）
     const pathMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(ts * 0.98, 0.05, ts * 0.98),
+      new THREE.BoxGeometry(ts * 0.99, 0.04, ts * 0.99),
       new THREE.MeshLambertMaterial({ color: 0x7a6345 }),
       tiles.length,
     );
@@ -78,81 +77,98 @@ export class TerrainBuilder {
     tiles.forEach((key, i) => {
       const [c, r] = key.split(',').map(Number);
       const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
-      dummy.position.set(p.x, -DEPTH, p.z);
+      // 路面在 y=-0.15 (草地在 y=0.15，落差0.3)
+      dummy.position.set(p.x, -0.15, p.z);
       dummy.updateMatrix();
       pathMesh.setMatrixAt(i, dummy.matrix);
-      const v = 0.40 + Math.random() * 0.15;
+      const v = 0.38 + Math.random() * 0.14;
       pathMesh.setColorAt(i, new THREE.Color(v, v * 0.75, v * 0.52));
     });
     pathMesh.instanceColor!.needsUpdate = true;
     this.group.add(pathMesh);
 
-    // 砖缝
+    // 砖缝线
     const lineGeo = new THREE.BufferGeometry();
     const lineVerts: number[] = [];
     tiles.forEach(key => {
       const [c, r] = key.split(',').map(Number);
       const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
       const half = ts * 0.47;
-      const ly = -DEPTH + 0.03;
+      const ly = -0.125;
       lineVerts.push(p.x - half, ly, p.z, p.x + half, ly, p.z);
       lineVerts.push(p.x, ly, p.z - half, p.x, ly, p.z + half);
     });
     lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineVerts, 3));
-    this.group.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x3a2a15, transparent: true, opacity: 0.3 })));
+    this.group.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x3a2a15, transparent: true, opacity: 0.25 })));
   }
 
-  /** 沟壑墙壁 + 顶部石沿 */
+  /** 沟壑边缘 — 用草地块覆盖路径两侧形成高台，路面看起来是凹下去的 */
   private buildPathBorder(pathTiles: Set<string>): void {
     const ts = TILE_SIZE * ThreeRenderer.SCALE;
-    const tiles = Array.from(pathTiles);
+    const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
+    const rows = Math.floor((GAME_HEIGHT - 140) / TILE_SIZE);
     const dummy = new THREE.Object3D();
-    const DEPTH = 0.4;
 
-    const edgeTiles = tiles.filter(key => {
+    // 在路径相邻的非路径格子上放"草地高台"（绿色方块y=0~0.15）
+    // 这些方块会遮住路面边缘，形成悬崖效果
+    const edgeGrassKeys: string[] = [];
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        if (pathTiles.has(`${c},${r}`)) continue;
+        // 检查是否与路径相邻
+        const adjPath = [[c-1,r],[c+1,r],[c,r-1],[c,r+1]].some(([nc, nr]) => pathTiles.has(`${nc},${nr}`));
+        if (adjPath) edgeGrassKeys.push(`${c},${r}`);
+      }
+    }
+
+    if (edgeGrassKeys.length === 0) return;
+
+    // 草地高台块 — 绿色厚方块，形成沟壑的"岸"
+    const bankMesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(ts * 1.02, 0.32, ts * 1.02),
+      new THREE.MeshLambertMaterial({ color: 0x4a8a3a }),
+      edgeGrassKeys.length,
+    );
+    bankMesh.receiveShadow = true;
+    bankMesh.castShadow = true;
+
+    edgeGrassKeys.forEach((key, i) => {
+      const [c, r] = key.split(',').map(Number);
+      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
+      // 方块底部在 y=-0.15（和路面齐平），顶部在 y=0.17（高于地面）
+      dummy.position.set(p.x, 0.01, p.z);
+      dummy.updateMatrix();
+      bankMesh.setMatrixAt(i, dummy.matrix);
+      // 绿色调变化
+      const g = 0.35 + Math.random() * 0.15;
+      bankMesh.setColorAt(i, new THREE.Color(g * 0.5, g, g * 0.3));
+    });
+    bankMesh.instanceColor!.needsUpdate = true;
+    this.group.add(bankMesh);
+
+    // 顶部石沿（路径边缘的装饰条）
+    const pathEdgeTiles = Array.from(pathTiles).filter(key => {
       const [c, r] = key.split(',').map(Number);
       return [[c-1,r],[c+1,r],[c,r-1],[c,r+1]].some(([nc, nr]) => !pathTiles.has(`${nc},${nr}`));
     });
-    if (edgeTiles.length === 0) return;
 
-    // 墙壁（从沟底延伸到地面，形成可见的垂直面）
-    const wallMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(ts * 1.01, DEPTH, ts * 1.01),
-      new THREE.MeshLambertMaterial({ color: 0x5a4a32 }),
-      edgeTiles.length,
-    );
-    wallMesh.receiveShadow = true;
-    wallMesh.castShadow = true;
+    if (pathEdgeTiles.length > 0) {
+      const capMesh = new THREE.InstancedMesh(
+        new THREE.BoxGeometry(ts * 1.04, 0.05, ts * 1.04),
+        new THREE.MeshLambertMaterial({ color: 0x6a5a3a }),
+        pathEdgeTiles.length,
+      );
+      capMesh.receiveShadow = true;
 
-    edgeTiles.forEach((key, i) => {
-      const [c, r] = key.split(',').map(Number);
-      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
-      dummy.position.set(p.x, -DEPTH / 2, p.z);
-      dummy.updateMatrix();
-      wallMesh.setMatrixAt(i, dummy.matrix);
-      const s = 0.28 + Math.random() * 0.08;
-      wallMesh.setColorAt(i, new THREE.Color(s, s * 0.82, s * 0.6));
-    });
-    wallMesh.instanceColor!.needsUpdate = true;
-    this.group.add(wallMesh);
-
-    // 顶部石沿（地面处的装饰边缘，稍微突出）
-    const capMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(ts * 1.1, 0.08, ts * 1.1),
-      new THREE.MeshLambertMaterial({ color: 0x8a7a62 }),
-      edgeTiles.length,
-    );
-    capMesh.receiveShadow = true;
-    capMesh.castShadow = true;
-
-    edgeTiles.forEach((key, i) => {
-      const [c, r] = key.split(',').map(Number);
-      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
-      dummy.position.set(p.x, 0.04, p.z);
-      dummy.updateMatrix();
-      capMesh.setMatrixAt(i, dummy.matrix);
-    });
-    this.group.add(capMesh);
+      pathEdgeTiles.forEach((key, i) => {
+        const [c, r] = key.split(',').map(Number);
+        const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
+        dummy.position.set(p.x, -0.12, p.z);
+        dummy.updateMatrix();
+        capMesh.setMatrixAt(i, dummy.matrix);
+      });
+      this.group.add(capMesh);
+    }
   }
 
   /** 可建造网格 — 非常淡 */

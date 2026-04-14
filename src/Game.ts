@@ -66,6 +66,10 @@ export class Game {
   private shiftDown: boolean = false;
   private helpVisible: boolean = false;
 
+  // B4: RP 事件
+  private rpEventTimer: number = 0;
+  private rpEventInterval: number = 45000; // 45秒一次
+
   // UI DOM
   private uiRoot!: HTMLElement;
   private messageEl!: HTMLElement;
@@ -126,11 +130,19 @@ export class Game {
         if (!e.active) this.enemies.splice(i, 1);
       }
 
+      // B4: RP 事件
+      this.rpEventTimer += delta;
+      if (this.rpEventTimer >= this.rpEventInterval) {
+        this.rpEventTimer = 0;
+        this.triggerRPEvent();
+      }
+
       // 消息
       if (this.messageTimer > 0) { this.messageTimer -= rawDelta; if (this.messageTimer <= 0 && this.messageEl) this.messageEl.style.opacity = '0'; }
 
       // 更新 UI
       this.updateTopBar();
+      this.updateMinimap();
     }
 
     // 3D 渲染
@@ -309,7 +321,7 @@ export class Game {
       onHiddenWaveStart: () => { this.showMessage('🌟 恭喜通过50波！进入隐藏关卡！'); soundManager.playVictory(); },
       onEndlessModeStart: () => { this.showMessage('♾️ 无尽模式开启！'); soundManager.playBossAlert(); },
     };
-    this.waveManager = new WaveManager(waveEvents);
+    this.waveManager = new WaveManager(waveEvents, this.difficulty);
 
     this.entityRenderer.reset();
     this.entityRenderer.buildTerrain(this.pathManager);
@@ -733,7 +745,9 @@ export class Game {
     if (!config) return;
     let hpMul = (1 + (this.waveManager.getCurrentWave() - 1) * 0.15) * this.diffHpMul;
     if (this.waveManager.getGameMode() === 'endless') hpMul *= this.waveManager.getEndlessScaling();
-    const enemy = new EnemyLogic(config, this.pathManager, hpMul);
+    // B1: 交替使用内外圈路径
+    const waypoints = this.pathManager.getSpawnWaypoints();
+    const enemy = new EnemyLogic(config, this.pathManager, hpMul, waypoints);
     enemy.onDeath = (e) => this.onEnemyDeath(e);
     this.enemies.push(enemy);
     for (const tower of this.towers) tower.setEnemies(this.enemies);
@@ -831,6 +845,11 @@ export class Game {
       kills: this.economyManager.getTotalKills(),
       pf: this.waveManager.getPFPoints(),
     };
+    // B5: 保存最高分
+    this.saveHighScore(stats.score);
+    const highScore = this.getHighScore();
+    const isNewRecord = stats.score >= highScore && stats.score > 0;
+
     this.uiRoot.innerHTML = `
       <div style="pointer-events:auto;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,10,26,0.9);">
         <h1 style="font-size:56px;color:${victory ? '#44FF44' : '#FF4444'};">${victory ? '🎉 胜 利 🎉' : '💀 失 败'}</h1>
@@ -838,6 +857,7 @@ export class Game {
         <div style="color:#FFF;font-size:18px;line-height:2;margin:16px 0;">
           <p>波次: ${stats.wave}/50 | 击杀: ${stats.kills}</p>
           <p>得分: ${stats.score} | PF: ${stats.pf}</p>
+          <p style="color:#FFD700;">🏆 最高分: ${highScore}${isNewRecord ? ' 🆕 新纪录！' : ''}</p>
         </div>
         <div style="display:flex;gap:16px;">
           <button onclick="window.__game?.restart()" style="pointer-events:auto;padding:12px 36px;background:#336633;border:2px solid #44FF44;color:#FFF;font-size:18px;cursor:pointer;border-radius:6px;font-family:inherit;">🔄 重新开始</button>
@@ -911,5 +931,89 @@ export class Game {
         return `<td style="padding:4px 8px;border:1px solid #333;color:${color};text-align:center;">${pct}%</td>`;
       }).join('')}
     </tr>`;
+  }
+
+  // ======================= B4: RP 事件 =======================
+
+  private triggerRPEvent(): void {
+    const events = [
+      { msg: '🎉 天降横财！获得 500 金！', gold: 500, wood: 0 },
+      { msg: '🪵 伐木工人进贡！获得 5 木材！', gold: 0, wood: 5 },
+      { msg: '💰 商人路过，获得 300 金！', gold: 300, wood: 0 },
+      { msg: '🎲 赌博赢了！获得 800 金！', gold: 800, wood: 0 },
+      { msg: '💸 缴纳保护费，扣除 200 金...', gold: -200, wood: 0 },
+      { msg: '🌲 发现宝箱！获得 3 木材！', gold: 100, wood: 3 },
+      { msg: '🔥 仓库失火！损失 150 金...', gold: -150, wood: 0 },
+      { msg: '⭐ 英雄塔获得灵感！+200金 +2木', gold: 200, wood: 2 },
+      { msg: '🎰 幸运转盘！获得 1000 金！', gold: 1000, wood: 0 },
+      { msg: '💀 盗贼来袭！损失 300 金...', gold: -300, wood: 0 },
+    ];
+    const event = events[Math.floor(Math.random() * events.length)];
+    if (event.gold > 0) this.economyManager.addGold(event.gold);
+    else if (event.gold < 0) this.economyManager.spendGold(Math.min(Math.abs(event.gold), this.economyManager.getGold()));
+    if (event.wood > 0) this.economyManager.addWood(event.wood);
+    this.showMessage(event.msg);
+    soundManager.playGold();
+  }
+
+  // ======================= B5: 最高分 =======================
+
+  private saveHighScore(score: number): void {
+    const key = `gcTD_highscore_${this.difficulty}`;
+    const prev = parseInt(localStorage.getItem(key) || '0');
+    if (score > prev) {
+      localStorage.setItem(key, String(score));
+    }
+  }
+
+  private getHighScore(): number {
+    return parseInt(localStorage.getItem(`gcTD_highscore_${this.difficulty}`) || '0');
+  }
+
+  // ======================= B6: 小地图 =======================
+
+  private updateMinimap(): void {
+    let canvas = this.uiRoot.querySelector('#minimap') as HTMLCanvasElement;
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.id = 'minimap';
+      canvas.width = 160;
+      canvas.height = 90;
+      canvas.style.cssText = 'position:absolute;bottom:135px;right:5px;border:1px solid #44FF44;border-radius:4px;background:rgba(0,0,0,0.6);z-index:15;';
+      this.uiRoot.appendChild(canvas);
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const scaleX = 160 / GAME_WIDTH;
+    const scaleY = 90 / (GAME_HEIGHT - 140);
+
+    ctx.clearRect(0, 0, 160, 90);
+
+    // 路径
+    ctx.fillStyle = 'rgba(139,115,85,0.4)';
+    this.pathManager.getPathTiles().forEach(key => {
+      const [col, row] = key.split(',').map(Number);
+      ctx.fillRect(col * TILE_SIZE * scaleX, row * TILE_SIZE * scaleY, TILE_SIZE * scaleX, TILE_SIZE * scaleY);
+    });
+
+    // 塔
+    ctx.fillStyle = '#44FF44';
+    for (const tower of this.towers) {
+      ctx.fillRect(tower.x * scaleX - 1.5, tower.y * scaleY - 1.5, 3, 3);
+    }
+
+    // 英雄
+    if (this.heroTower?.active) {
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(this.heroTower.x * scaleX - 2, this.heroTower.y * scaleY - 2, 4, 4);
+    }
+
+    // 怪物（红色密度点）
+    ctx.fillStyle = 'rgba(255,68,68,0.6)';
+    for (const e of this.enemies) {
+      if (!e.active || e.isDying()) continue;
+      ctx.fillRect(e.x * scaleX - 0.5, e.y * scaleY - 0.5, 1.5, 1.5);
+    }
   }
 }

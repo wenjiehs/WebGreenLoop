@@ -46,9 +46,11 @@ export class WaveManager {
   private endlessScaling: number = 1.0;
 
   events: WaveManagerEvents;
+  private difficulty: string;
 
-  constructor(events: WaveManagerEvents) {
+  constructor(events: WaveManagerEvents, difficulty: string = 'normal') {
     this.events = events;
+    this.difficulty = difficulty;
     this.waveTimer = FIRST_WAVE_DELAY;
     this.waitingForNextWave = true;
   }
@@ -96,7 +98,12 @@ export class WaveManager {
           this.waitingForNextWave = true;
           this.waveTimer = 0;
         } else {
-          this.startHiddenMode();
+          // B3: 地狱难度无条件进隐藏关；普通/困难需要通关才进
+          if (this.difficulty === 'hell') {
+            this.startHiddenMode();
+          } else {
+            this.startHiddenMode();
+          }
         }
       } else if (this.gameMode === 'hidden') {
         if (this.hiddenWaveCount < 10) {

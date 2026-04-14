@@ -93,8 +93,16 @@ export class TowerLogic {
       this.heroLevel = 1 + Math.floor(this.killCount / 10);
       const growBonus = 1 + (this.heroLevel - 1) * 0.08;
       let baseDmg = this.config.damage;
-      if (this.level > 0 && this.config.upgrades[this.level - 1]) baseDmg = this.config.upgrades[this.level - 1].damage;
+      let baseAS = this.config.attackSpeed;
+      let baseRange = this.config.range;
+      if (this.level > 0 && this.config.upgrades[this.level - 1]) {
+        baseDmg = this.config.upgrades[this.level - 1].damage;
+        baseAS = this.config.upgrades[this.level - 1].attackSpeed;
+        baseRange = this.config.upgrades[this.level - 1].range;
+      }
       this.currentDamage = Math.floor(baseDmg * growBonus);
+      this.currentAttackSpeed = Math.max(200, baseAS - (this.heroLevel - 1) * 15);
+      this.currentRange = baseRange + (this.heroLevel - 1) * 3;
     }
   }
 

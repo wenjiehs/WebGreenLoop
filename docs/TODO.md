@@ -47,70 +47,86 @@ src/
 
 ## 🔴 A 类 — 当前版本缺失/broken 的功能
 
-### A1. 木材/资源交换 UI
-- [ ] 顶栏缺少木材🪵显示
-- [ ] 缺少 [5000金→10木] 交换按钮
-- [ ] 缺少 [12木→+1人口] 交换按钮
-- 涉及: `Game.ts` createPlayingUI/updateTopBar
+### A1. 木材/资源交换 UI ✅
+- [x] 顶栏显示木材🪵数量
+- [x] [5000金→10木] 交换按钮
+- [x] [12木→+1人口] 交换按钮
+- 涉及: `Game.ts` createPlayingUI/updateTopBar/buyWood/buyPopulation
 
-### A2. 暂停/加速 UI 状态同步
-- [ ] 暂停时3D场景应该冻结动画
-- [ ] 加速按钮点击区域在顶栏，但 pointer-events 需要精确控制
+### A2. 暂停/加速 UI 状态同步 ✅
+- [x] 暂停时 delta=0 冻结游戏逻辑和3D动画
+- [x] 加速按钮 pointer-events:auto 可点击
 - 涉及: `Game.ts` gameLoop
 
-### A3. 克制表 (H键)
-- [ ] 按H键显示攻击/护甲克制矩阵表
-- [ ] HTML overlay 弹窗
-- 涉及: `Game.ts` setupInput
+### A3. 克制表 (H键) ✅
+- [x] 按H键显示 7×7 攻击/护甲克制矩阵表
+- [x] HTML overlay 弹窗（绿色克制/红色被克）
+- [x] 底部显示魔免/毒免/飞行/隐形说明
+- [x] 点击任意处或再按H关闭
+- 涉及: `Game.ts` toggleHelp
 
-### A4. 波次信息完善
-- [ ] 隐藏关/无尽模式的波次显示标记（🌟/♾️）
-- [ ] Boss 限时倒计时显示
-- [ ] Boss波BGM切换
+### A4. 波次信息完善 ✅
+- [x] 隐藏关显示🌟标记+进度
+- [x] 无尽模式显示♾️+强度倍率
+- [x] Boss 限时⏱倒计时显示
+- [x] Boss波BGM切换
 - 涉及: `Game.ts` onWaveStart/updateTopBar
 
-### A5. 商店买不起灰显
-- [ ] 金钱不足时商店按钮灰色+半透明
-- [ ] 每次金钱变化时刷新
-- 涉及: `Game.ts` createShop/economyManager.onGoldChange
+### A5. 商店买不起灰显 ✅
+- [x] 金钱不足时商店按钮 opacity=0.4
+- [x] 每次金钱/人口变化时刷新 updateShopAffordability
+- [x] 商店 tooltip 显示攻击类型/特殊效果/属性
+- 涉及: `Game.ts` createShop/updateShopAffordability
 
-### A6. 建造预览红绿提示
-- [ ] 3D 建造预览：可建造=绿色半透明，不可建造=红色半透明
-- [ ] 当前只有绿色预览，不区分可建造/不可建造
-- 涉及: `EntityRenderer.ts` showBuildPreview, `Game.ts`
+### A6. 建造预览红绿提示 ✅
+- [x] 可建造=绿色半透明塔模型
+- [x] 不可建造=红色半透明+红色发光(emissive)
+- [x] EntityRenderer.showBuildPreview 加 canBuild 参数
+- 涉及: `EntityRenderer.ts`, `Game.ts`
 
-### A7. 连续建造 (Shift)
-- [ ] 按住Shift时建造后不取消选择，继续建造模式
+### A7. 连续建造 (Shift) ✅
+- [x] Shift 键状态追踪(keydown/keyup)
+- [x] 按住Shift建造后不取消选择，继续建造模式
 - 涉及: `Game.ts` tryPlaceTower
 
 ---
 
 ## 🟡 B 类 — 功能完善
 
-### B1. 双环跑道
-- [ ] 内外两条方形跑道
-- 涉及: `PathManager.ts`
+### B1. 双环跑道 ✅
+- [x] 外圈(margin=3) + 内圈(margin=8) 双方形跑道
+- [x] 怪物交替在内外圈生成(getSpawnWaypoints)
+- [x] EnemyLogic 支持指定路径点列表
+- 涉及: `PathManager.ts`, `EnemyLogic.ts`, `Game.ts`
 
-### B2. 破坏塔/魔幻塔英雄成长
-- [ ] hero_grow special 在 TowerLogic 中未实现成长公式
+### B2. 破坏塔/魔幻塔英雄成长 ✅
+- [x] hero_grow 伤害成长: +8%/英雄等级
+- [x] hero_grow 攻速成长: -15ms/英雄等级
+- [x] hero_grow 射程成长: +3/英雄等级
 - 涉及: `TowerLogic.ts`
 
-### B3. 淘汰模式 / 地狱难度规则
-- [ ] 淘汰模式：50波无隐藏关
-- [ ] 地狱难度：可无条件进隐藏关
+### B3. 淘汰模式 / 地狱难度规则 ✅
+- [x] WaveManager 接收 difficulty 参数
+- [x] 地狱难度：50波通关后无条件进隐藏关
 - 涉及: `WaveManager.ts`, `Game.ts`
 
-### B4. RP 事件系统
-- [ ] 随机事件（金钱/木材/扣钱）
-- 涉及: 新建 `EventSystem.ts`
+### B4. RP 事件系统 ✅
+- [x] 每45秒随机触发一次事件
+- [x] 10种事件（获得金/木/失去金）
+- [x] 消息提示+音效
+- 涉及: `Game.ts` triggerRPEvent
 
-### B5. 计分系统
-- [ ] 历史最高分 localStorage
-- 涉及: `EconomyManager.ts`, `Game.ts`
+### B5. 计分系统 ✅
+- [x] 历史最高分 localStorage（按难度分别记录）
+- [x] 结算画面显示🏆最高分
+- [x] 新纪录标记🆕
+- 涉及: `Game.ts` saveHighScore/getHighScore/showGameOver
 
-### B6. 小地图
-- [ ] HTML canvas 小地图显示全局
-- 涉及: `Game.ts`
+### B6. 小地图 ✅
+- [x] 右下角 160×90 HTML canvas 小地图
+- [x] 显示路径(棕色)/塔(绿色)/英雄(金色)/怪物(红色)
+- [x] 每帧更新
+- 涉及: `Game.ts` updateMinimap
 
 ---
 

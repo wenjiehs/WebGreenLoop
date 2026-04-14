@@ -18,6 +18,7 @@ export class EnemyLogic {
   active: boolean = true;
 
   private pathManager: PathManager;
+  private waypointList: Vec2[]; // 可以是外圈或内圈
   private currentWaypointIndex: number = 0;
   laps: number = 0;
 
@@ -37,16 +38,17 @@ export class EnemyLogic {
 
   onDeath?: (enemy: EnemyLogic) => void;
 
-  constructor(config: EnemyConfig, pathManager: PathManager, waveMultiplier: number = 1) {
+  constructor(config: EnemyConfig, pathManager: PathManager, waveMultiplier: number = 1, waypoints?: Vec2[]) {
     this.config = config;
-    const spawn = pathManager.getSpawnPoint();
+    this.pathManager = pathManager;
+    this.waypointList = waypoints || pathManager.getWaypoints();
+    const spawn = this.waypointList[0];
     this.x = spawn.x;
     this.y = spawn.y;
     this.maxHp = Math.floor(config.hp * waveMultiplier);
     this.hp = this.maxHp;
     this.baseSpeed = config.speed;
     this.speed = config.speed;
-    this.pathManager = pathManager;
   }
 
   // Getters
@@ -133,7 +135,7 @@ export class EnemyLogic {
     }
 
     // 移动
-    const waypoints = this.pathManager.getWaypoints();
+    const waypoints = this.waypointList;
     const target = waypoints[this.currentWaypointIndex];
     const dx = target.x - this.x, dy = target.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);

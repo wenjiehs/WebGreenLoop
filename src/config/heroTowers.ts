@@ -37,6 +37,7 @@ export interface HeroTowerConfig {
   baseDamage: number;
   baseRange: number;
   baseAttackSpeed: number;
+  populationCost: number; // 英雄占用人口数（按强度不同）
   strGrowth: number;
   agiGrowth: number;
   intGrowth: number;
@@ -55,7 +56,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '远程魔法输出，智力越高火焰伤害越强',
     color: 0xFF4400, projectileColor: 0xFF6633,
     baseAttackType: AttackType.MAGIC, baseDamage: 15, baseRange: 180, baseAttackSpeed: 1000,
-    strGrowth: 1.5, agiGrowth: 1.0, intGrowth: 2.5,
+    populationCost: 3, strGrowth: 1.5, agiGrowth: 1.0, intGrowth: 2.5,
     strEffect: '增加HP上限', agiEffect: '增加攻速', intEffect: '增加技能伤害',
     skills: [
       { id: 'fire_bolt', name: '火球术', description: '强化普攻，附加智力系火焰伤害', maxLevel: 5, isActive: false,
@@ -74,7 +75,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '敏捷型物理输出，攻速极快',
     color: 0x334466, projectileColor: 0x5566AA,
     baseAttackType: AttackType.PIERCE, baseDamage: 12, baseRange: 200, baseAttackSpeed: 800,
-    strGrowth: 1.0, agiGrowth: 2.5, intGrowth: 1.5,
+    populationCost: 4, strGrowth: 1.0, agiGrowth: 2.5, intGrowth: 1.5,
     strEffect: '增加基础伤害', agiEffect: '增加攻速和闪避', intEffect: '增加技能效果',
     skills: [
       { id: 'frost_arrow', name: '冰箭', description: '普攻附带减速30%，持续2秒', maxLevel: 5, isActive: false,
@@ -93,7 +94,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '力量型近战英雄，暴击伤害极高',
     color: 0xCC8844, projectileColor: 0xFFAA66,
     baseAttackType: AttackType.HERO, baseDamage: 20, baseRange: 160, baseAttackSpeed: 900,
-    strGrowth: 2.5, agiGrowth: 2.0, intGrowth: 0.5,
+    populationCost: 3, strGrowth: 2.5, agiGrowth: 2.0, intGrowth: 0.5,
     strEffect: '增加攻击力', agiEffect: '增加攻速和暴击', intEffect: '增加技能范围',
     skills: [
       { id: 'critical_strike', name: '致命一击', description: '暴击率+8%/级，暴击倍率1.5起', maxLevel: 5, isActive: false,
@@ -112,7 +113,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '智力型法师，连锁闪电可扫清成群怪物',
     color: 0x4488FF, projectileColor: 0x66AAFF,
     baseAttackType: AttackType.MAGIC, baseDamage: 14, baseRange: 190, baseAttackSpeed: 1100,
-    strGrowth: 1.0, agiGrowth: 1.5, intGrowth: 2.5,
+    populationCost: 3, strGrowth: 1.0, agiGrowth: 1.5, intGrowth: 2.5,
     strEffect: '增加HP', agiEffect: '增加攻速', intEffect: '增加闪电伤害和跳数',
     skills: [
       { id: 'chain_lightning', name: '连锁闪电', description: '普攻附带闪电跳跃，跳3+目标', maxLevel: 5, isActive: false,
@@ -131,7 +132,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '敏捷型辅助，水墨环可大幅减速敌人',
     color: 0x2288CC, projectileColor: 0x44AAEE,
     baseAttackType: AttackType.MAGIC, baseDamage: 12, baseRange: 170, baseAttackSpeed: 1000,
-    strGrowth: 1.0, agiGrowth: 2.0, intGrowth: 2.0,
+    populationCost: 4, strGrowth: 1.0, agiGrowth: 2.0, intGrowth: 2.0,
     strEffect: '增加HP', agiEffect: '增加水墨环减速效果', intEffect: '增加暴风雨伤害',
     skills: [
       { id: 'water_bolt', name: '水弹', description: '普攻附带减速20%+5%/级', maxLevel: 5, isActive: false,
@@ -150,7 +151,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '智力型远程，风系技能可控可打',
     color: 0x88CC88, projectileColor: 0xAAEEAA,
     baseAttackType: AttackType.PIERCE, baseDamage: 13, baseRange: 200, baseAttackSpeed: 900,
-    strGrowth: 1.0, agiGrowth: 1.5, intGrowth: 2.5,
+    populationCost: 4, strGrowth: 1.0, agiGrowth: 1.5, intGrowth: 2.5,
     strEffect: '增加HP', agiEffect: '增加攻速', intEffect: '增加风暴伤害',
     skills: [
       { id: 'gust', name: '风暴突袭', description: '每8s释放风暴AOE推开敌人', maxLevel: 5, isActive: true, cooldown: 8000,
@@ -169,7 +170,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '全属性战士，均衡发展，技能丰富',
     color: 0xDD6622, projectileColor: 0xFF8844,
     baseAttackType: AttackType.CHAOS, baseDamage: 18, baseRange: 165, baseAttackSpeed: 950,
-    strGrowth: 2.0, agiGrowth: 1.5, intGrowth: 1.5,
+    populationCost: 2, strGrowth: 2.0, agiGrowth: 1.5, intGrowth: 1.5,
     strEffect: '增加攻击力', agiEffect: '增加攻速', intEffect: '增加技能伤害',
     skills: [
       { id: 'war_cry', name: '战吼', description: '被动提升攻击力', maxLevel: 5, isActive: false,
@@ -188,7 +189,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '召唤型英雄，召唤野兽协助战斗',
     color: 0x886622, projectileColor: 0xAA8844,
     baseAttackType: AttackType.NORMAL, baseDamage: 16, baseRange: 175, baseAttackSpeed: 1000,
-    strGrowth: 2.0, agiGrowth: 1.5, intGrowth: 1.5,
+    populationCost: 4, strGrowth: 2.0, agiGrowth: 1.5, intGrowth: 1.5,
     strEffect: '增加攻击力', agiEffect: '增加攻速', intEffect: '增加召唤物数量',
     skills: [
       { id: 'summon_hawk', name: '召唤战鹰', description: '召唤战鹰持续输出(被动加伤)', maxLevel: 5, isActive: false,
@@ -207,7 +208,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '智力型暗系英雄，成长潜力极高',
     color: 0x660044, projectileColor: 0x990066,
     baseAttackType: AttackType.CHAOS, baseDamage: 14, baseRange: 175, baseAttackSpeed: 1050,
-    strGrowth: 1.5, agiGrowth: 1.0, intGrowth: 2.5,
+    populationCost: 3, strGrowth: 1.5, agiGrowth: 1.0, intGrowth: 2.5,
     strEffect: '增加HP', agiEffect: '增加攻速', intEffect: '增加暗影伤害',
     skills: [
       { id: 'shadow_bolt', name: '暗影箭', description: '强化普攻，附加智力系暗影伤害', maxLevel: 5, isActive: false,
@@ -226,7 +227,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '控制型法师，冰冻能力极强',
     color: 0x88CCFF, projectileColor: 0xAAEEFF,
     baseAttackType: AttackType.MAGIC, baseDamage: 11, baseRange: 185, baseAttackSpeed: 1100,
-    strGrowth: 0.5, agiGrowth: 1.5, intGrowth: 3.0,
+    populationCost: 2, strGrowth: 0.5, agiGrowth: 1.5, intGrowth: 3.0,
     strEffect: '增加HP', agiEffect: '增加攻速', intEffect: '增加冰冻伤害和时间',
     skills: [
       { id: 'frost_nova', name: '霜冻新星', description: '每8s释放冰爆，范围伤害+减速', maxLevel: 5, isActive: true, cooldown: 8000,
@@ -245,7 +246,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '敏捷型刺客，暴击连击爆发极强',
     color: 0x553366, projectileColor: 0x775588,
     baseAttackType: AttackType.HERO, baseDamage: 16, baseRange: 155, baseAttackSpeed: 750,
-    strGrowth: 2.0, agiGrowth: 2.5, intGrowth: 0.5,
+    populationCost: 4, strGrowth: 2.0, agiGrowth: 2.5, intGrowth: 0.5,
     strEffect: '增加攻击力(每50+400)', agiEffect: '增加攻速和暴击率', intEffect: '增加技能冷却',
     skills: [
       { id: 'phantom_strike', name: '幻影突袭', description: '被动连击，每次攻击多打一次', maxLevel: 5, isActive: false,
@@ -264,7 +265,7 @@ export const HERO_TOWER_CONFIGS: HeroTowerConfig[] = [
     description: '力量型坦克英雄，AOE震荡波威力巨大',
     color: 0x996633, projectileColor: 0xBB8855,
     baseAttackType: AttackType.NORMAL, baseDamage: 22, baseRange: 150, baseAttackSpeed: 1200,
-    strGrowth: 3.0, agiGrowth: 1.0, intGrowth: 1.0,
+    populationCost: 2, strGrowth: 3.0, agiGrowth: 1.0, intGrowth: 1.0,
     strEffect: '增加攻击力和震荡伤害', agiEffect: '增加攻速', intEffect: '增加技能范围',
     skills: [
       { id: 'war_stomp', name: '战争践踏', description: '每8s践踏范围内敌人并眩晕', maxLevel: 5, isActive: true, cooldown: 8000,

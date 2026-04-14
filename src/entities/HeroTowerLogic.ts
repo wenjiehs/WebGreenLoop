@@ -19,7 +19,7 @@ export class HeroTowerLogic {
 
   heroLevel: number = 1;
   experience: number = 0;
-  expToNextLevel: number = 20;
+  expToNextLevel: number = 8; // lv1 → lv2 需要 8 经验 (lv²×8)
   str: number = 10; agi: number = 10; int: number = 10;
   freePoints: number = 5;
   learnedSkills: { skill: HeroSkill; level: number }[] = [];
@@ -101,7 +101,7 @@ export class HeroTowerLogic {
 
   private levelUp(): void {
     this.heroLevel += 1;
-    this.expToNextLevel = Math.floor(20 * Math.pow(1.12, this.heroLevel - 1));
+    this.expToNextLevel = this.heroLevel * this.heroLevel * 8; // 经验曲线: lv²×8
     this.freePoints += 3;
     if (this.heroLevel % 2 === 0) this.skillPoints += 1;
     const totalGrowth = this.config.strGrowth + this.config.agiGrowth + this.config.intGrowth;
@@ -152,7 +152,7 @@ export class HeroTowerLogic {
   }
 
   private recalculateStats(): void {
-    this.currentDamage = this.config.baseDamage + Math.floor(this.str * 0.8);
+    this.currentDamage = this.config.baseDamage + Math.floor(this.str * 1.5); // 力量加成加强
     this.currentSplash = 0;
     this.critChance = 0;
     this.critMultiplier = 1.5;
@@ -179,8 +179,8 @@ export class HeroTowerLogic {
       }
     }
 
-    this.currentAttackSpeed = Math.max(450, this.config.baseAttackSpeed - this.agi * 2.0 - this.tempAtkSpeedBonus);
-    this.currentRange = this.config.baseRange + Math.floor(this.int * 0.25);
+    this.currentAttackSpeed = Math.max(500, this.config.baseAttackSpeed - this.agi * 3.0 - this.tempAtkSpeedBonus);
+    this.currentRange = this.config.baseRange + Math.floor(this.int * 0.5); // 智力加成翻倍
     this.currentDamage += this.tempDamageBonus;
   }
 
@@ -188,7 +188,10 @@ export class HeroTowerLogic {
     switch (scaling) { case 'str': return this.str; case 'agi': return this.agi; case 'int': return this.int; default: return 0; }
   }
 
-  addKill(): void { this.killCount += 1; this.addExperience(3 + Math.floor(this.heroLevel * 0.5)); }
+  addKill(goldReward: number = 2): void {
+    this.killCount += 1;
+    this.addExperience(Math.max(1, Math.floor(goldReward * 1.5)));
+  }
 
   update(delta: number): void {
     this.tryFireActiveSkills(delta);

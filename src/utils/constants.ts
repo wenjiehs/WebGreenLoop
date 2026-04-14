@@ -28,14 +28,15 @@ export const COLORS = {
 };
 
 // 游戏平衡常量
-export const STARTING_GOLD = 100;
-export const STARTING_WOOD = 0;
+export const STARTING_GOLD = 800;
+export const STARTING_WOOD = 5;
 export const STARTING_LIVES = 0; // 无生命值，靠怪物上限
 export const MAX_ENEMIES_ON_MAP = 100;
 export const WAVE_INTERVAL = 25000; // 波次间隔 ms
 export const FIRST_WAVE_DELAY = 5000;
 export const TOWER_SELL_RATIO = 0.75;
 export const TOWER_SELL_RATIO_WAVE1 = 1.0;
+export const INTEREST_RATE = 0.02; // 每波利息 2%
 
 // PF系统
 export const PF_UNLOCK_ENDLESS = 40;

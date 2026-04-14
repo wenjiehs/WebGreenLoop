@@ -19,10 +19,10 @@ type GamePhase = 'menu' | 'hero_select' | 'playing' | 'game_over';
 type Difficulty = 'easy' | 'normal' | 'hard' | 'hell';
 
 const DIFFICULTY_PARAMS: Record<Difficulty, { hpMul: number; gold: number; label: string }> = {
-  easy:   { hpMul: 0.7, gold: 200, label: '简单' },
-  normal: { hpMul: 1.0, gold: 100, label: '普通' },
-  hard:   { hpMul: 1.5, gold: 80, label: '困难' },
-  hell:   { hpMul: 3.0, gold: 60, label: '地狱' },
+  easy:   { hpMul: 0.7, gold: 1000, label: '简单' },
+  normal: { hpMul: 1.0, gold: 800, label: '普通' },
+  hard:   { hpMul: 1.5, gold: 600, label: '困难' },
+  hell:   { hpMul: 3.0, gold: 400, label: '地狱' },
 };
 
 /**
@@ -314,7 +314,10 @@ export class Game {
 
     const waveEvents: WaveManagerEvents = {
       onWaveStart: (wn, wc) => this.onWaveStart(wn, wc),
-      onWaveComplete: (wn) => this.showMessage(`✅ 第 ${wn} 波完成！+1 PF`),
+      onWaveComplete: (wn) => {
+        const rewards = this.economyManager.onWaveComplete(wn);
+        this.showMessage(`✅ 第 ${wn} 波完成！+${rewards.goldReward}金 +${rewards.woodReward}木 利息+${rewards.interest}`);
+      },
       onSpawnEnemy: (eid) => this.spawnEnemy(eid),
       onAllWavesComplete: () => this.onVictory(),
       onGameOver: (reason) => this.onGameOver(reason),
@@ -392,7 +395,7 @@ export class Game {
     }
 
     this.gridManager.occupy(bestCol, bestRow);
-    this.economyManager.addPopulation();
+    this.economyManager.addPopulation(heroConfig.populationCost); // 英雄按强度占不同人口
     this.heroTower = new HeroTowerLogic(heroConfig, bestCol, bestRow);
     this.heroTower.setEnemies(this.enemies);
     this.heroTower.onProjectileHit = (x, y, dmg, sp, at, special) => this.handleProjectileHit(x, y, dmg, sp, at as AttackType, special, null, true);
@@ -781,7 +784,7 @@ export class Game {
     this.economyManager.onEnemyKilled(enemy.config.goldReward);
     if (enemy.config.isBoss) { soundManager.playBossDeath(); this.entityRenderer.effects.spawnBossExplosion(enemy.x, enemy.y); }
     else soundManager.playEnemyDeath();
-    if (this.heroTower?.active) this.heroTower.addExperience(1 + Math.floor(enemy.config.goldReward * 0.5));
+    if (this.heroTower?.active) this.heroTower.addKill(enemy.config.goldReward);
     this.waveManager.onEnemyDied();
   }
 

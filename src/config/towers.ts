@@ -97,7 +97,7 @@ export const TOWER_CONFIGS: Record<string, TowerConfig> = {
       { cost: 300, damage: 10, range: 155, attackSpeed: 1100, splash: 90 },
       { cost: 800, damage: 16, range: 170, attackSpeed: 1000, splash: 100 },
       { cost: 2000, damage: 25, range: 185, attackSpeed: 900, splash: 110, name: '减速塔 4级' },
-      { cost: 40000, damage: 60, range: 220, attackSpeed: 700, splash: 140, name: '雪人' },
+      { cost: 6000, damage: 60, range: 220, attackSpeed: 700, splash: 140, name: '雪人' },
     ],
   },
 
@@ -112,7 +112,7 @@ export const TOWER_CONFIGS: Record<string, TowerConfig> = {
       { cost: 1700, damage: 70, range: 195, attackSpeed: 1200, splash: 0 },
       { cost: 4200, damage: 120, range: 210, attackSpeed: 1100, splash: 0 },
       { cost: 10000, damage: 200, range: 230, attackSpeed: 1000, splash: 0, name: '枪兵塔 4级' },
-      { cost: 25000, damage: 350, range: 250, attackSpeed: 900, splash: 0, name: '枪兵塔 顶级' },
+      { cost: 8000, damage: 350, range: 250, attackSpeed: 900, splash: 0, name: '枪兵塔 顶级' },
     ],
   },
   corruption: {
@@ -194,8 +194,8 @@ export const TOWER_CONFIGS: Record<string, TowerConfig> = {
     upgrades: [
       { cost: 2000, damage: 90, range: 195, attackSpeed: 950, splash: 0, name: '破坏塔 2级' },
       { cost: 5000, damage: 150, range: 210, attackSpeed: 900, splash: 0, name: '破坏塔 3级' },
-      { cost: 15000, damage: 280, range: 230, attackSpeed: 850, splash: 32, name: '国王塔' },
-      { cost: 100000, damage: 600, range: 260, attackSpeed: 750, splash: 56, name: '超级破坏塔' },
+      { cost: 5000, damage: 280, range: 230, attackSpeed: 850, splash: 32, name: '国王塔' },
+      { cost: 15000, damage: 600, range: 260, attackSpeed: 750, splash: 56, name: '超级破坏塔' },
     ],
   },
 
@@ -228,7 +228,7 @@ export const TOWER_CONFIGS: Record<string, TowerConfig> = {
   executioner: {
     id: 'executioner', name: '秒杀塔', category: 'special',
     description: '极低攻速但可秒杀单个非BOSS怪物',
-    cost: 40000, attackType: AttackType.CHAOS, damage: 99999,
+    cost: 5000, attackType: AttackType.CHAOS, damage: 99999,
     range: 200, attackSpeed: 5000, splash: 0,
     color: 0xDD2222, projectileSpeed: 1000, projectileColor: 0xFF4444,
     special: 'execute',

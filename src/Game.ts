@@ -412,7 +412,7 @@ export class Game {
 
   private createPlayingUI(): void {
     this.uiRoot.innerHTML = `
-      <div id="topbar" style="position:absolute;top:0;left:0;right:0;height:44px;background:rgba(0,0,0,0.5);display:flex;align-items:center;padding:0 12px;gap:12px;font-size:13px;color:#FFF;z-index:10;flex-wrap:wrap;">
+      <div id="topbar" style="position:absolute;top:0;left:0;right:0;height:44px;background:linear-gradient(180deg,rgba(15,12,25,0.95),rgba(8,6,16,0.85));border-bottom:2px solid #886622;display:flex;align-items:center;padding:0 12px;gap:12px;font-size:13px;color:#FFF;z-index:10;flex-wrap:wrap;box-shadow:0 4px 12px rgba(0,0,0,0.4);">
         <span id="gold-text">💰 ${this.economyManager.getGold()}</span>
         <span id="wood-text" style="color:#CC9966;">🪵 ${this.economyManager.getWood()}</span>
         <span id="wave-text">波次: 0/50</span>
@@ -428,7 +428,7 @@ export class Game {
       </div>
       <div id="message-bar" style="position:absolute;top:48px;left:50%;transform:translateX(-50%);color:#FFF;font-size:13px;background:rgba(0,0,0,0.6);padding:4px 16px;border-radius:4px;opacity:0;transition:opacity 0.3s;white-space:nowrap;z-index:15;"></div>
       <div id="help-overlay" style="pointer-events:auto;display:none;position:absolute;inset:0;background:rgba(0,0,0,0.8);z-index:50;display:none;justify-content:center;align-items:center;"></div>
-      <div id="shop-panel" style="pointer-events:auto;position:absolute;bottom:0;left:0;right:0;height:130px;background:#111122;border-top:2px solid #44ff44;display:flex;flex-wrap:wrap;gap:3px;padding:4px;overflow-y:auto;z-index:10;"></div>
+      <div id="shop-panel" style="pointer-events:auto;position:absolute;bottom:0;left:0;right:0;height:130px;background:linear-gradient(180deg,rgba(15,12,25,0.92),rgba(8,6,16,0.96));border-top:2px solid #886622;display:flex;flex-wrap:wrap;gap:3px;padding:4px;overflow-y:auto;z-index:10;box-shadow:0 -4px 16px rgba(0,0,0,0.5);"></div>
       <div id="info-panel" style="pointer-events:auto;display:none;position:absolute;right:8px;top:50px;width:200px;background:rgba(20,20,40,0.95);border:1px solid #44FF44;border-radius:6px;padding:10px;color:#FFF;font-size:11px;z-index:20;"></div>`;
 
     this.messageEl = this.uiRoot.querySelector('#message-bar')!;
@@ -476,25 +476,29 @@ export class Game {
       btn.dataset.index = String(i);
       btn.dataset.cost = String(config.cost);
       btn.dataset.towerId = config.id;
-      btn.style.cssText = `width:148px;height:54px;background:#222233;border:1px solid #444466;border-radius:4px;cursor:pointer;padding:4px 6px;position:relative;display:flex;align-items:center;gap:6px;transition:opacity 0.2s;`;
+      btn.style.cssText = `width:148px;height:54px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid #334;border-radius:6px;cursor:pointer;padding:4px 6px;position:relative;display:flex;align-items:center;gap:6px;transition:all 0.15s;box-shadow:0 2px 4px rgba(0,0,0,0.3);`;
       btn.innerHTML = `
-        <div style="width:22px;height:22px;background:#${config.color.toString(16).padStart(6,'0')};border:1px solid #888;border-radius:3px;flex-shrink:0;"></div>
+        <div style="width:24px;height:24px;background:#${config.color.toString(16).padStart(6,'0')};border:2px solid #666;border-radius:4px;flex-shrink:0;box-shadow:0 0 6px #${config.color.toString(16).padStart(6,'0')}44;"></div>
         <div>
-          <div style="font-size:11px;color:#FFF;">${config.name}</div>
+          <div style="font-size:11px;color:#EEE;font-weight:bold;">${config.name}</div>
           <div style="font-size:10px;color:#FFD700;">💰${config.cost}</div>
           <div style="font-size:9px;color:#889;">${config.splash > 0 ? 'AOE' : config.attackType}${config.special ? ' [' + config.special + ']' : ''}</div>
         </div>
-        <div style="position:absolute;top:2px;right:4px;font-size:9px;color:#556;">${i < 9 ? i + 1 : '0'}</div>`;
+        <div style="position:absolute;top:2px;right:5px;font-size:9px;color:#FFD700;background:rgba(0,0,0,0.4);padding:0 3px;border-radius:2px;">${i < 9 ? i + 1 : '0'}</div>`;
 
       btn.addEventListener('click', () => this.selectTowerToBuild(config, i));
       btn.addEventListener('mouseenter', () => {
-        btn.style.borderColor = '#44FF44';
+        btn.style.borderColor = '#886622';
+        btn.style.boxShadow = '0 2px 8px rgba(136,102,34,0.4)';
+        btn.style.transform = 'translateY(-1px)';
         const atkLabel = config.attackType;
         const splashInfo = config.splash > 0 ? ` | AOE ${config.splash}px` : '';
         this.showMessage(`${config.name} - ${config.description} | ${atkLabel}${splashInfo} | 伤害${config.damage} | 射程${config.range} | 攻速${(config.attackSpeed / 1000).toFixed(1)}s`);
       });
       btn.addEventListener('mouseleave', () => {
-        btn.style.borderColor = this.selectedTowerConfig?.id === config.id ? '#44FF44' : '#444466';
+        btn.style.borderColor = this.selectedTowerConfig?.id === config.id ? '#886622' : '#334';
+        btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+        btn.style.transform = 'translateY(0)';
       });
       panel.appendChild(btn);
     });

@@ -25,46 +25,102 @@ export class TerrainBuilder {
     return this.group;
   }
 
-  /** 大地草地平面 */
+  /** 大地草地平面 — canvas 生成草地纹理 */
   private buildGround(): void {
     const w = GAME_WIDTH * ThreeRenderer.SCALE;
     const h = (GAME_HEIGHT - 140) * ThreeRenderer.SCALE;
 
-    const grassGeo = new THREE.PlaneGeometry(w * 1.5, h * 1.5, 80, 60);
+    // canvas 生成草地纹理
+    const texSize = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = texSize; canvas.height = texSize;
+    const ctx = canvas.getContext('2d')!;
+
+    // 基础绿色
+    ctx.fillStyle = '#3a7a2a';
+    ctx.fillRect(0, 0, texSize, texSize);
+
+    // 多层噪点模拟草地
+    for (let i = 0; i < 8000; i++) {
+      const x = Math.random() * texSize;
+      const y = Math.random() * texSize;
+      const shade = 40 + Math.random() * 60;
+      const g = 90 + Math.random() * 80;
+      ctx.fillStyle = `rgb(${shade},${g},${shade * 0.4})`;
+      ctx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 3);
+    }
+
+    // 深色斑点
+    for (let i = 0; i < 300; i++) {
+      const x = Math.random() * texSize;
+      const y = Math.random() * texSize;
+      ctx.fillStyle = `rgba(20,40,10,${0.1 + Math.random() * 0.15})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 2 + Math.random() * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(8, 6);
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+
+    const grassGeo = new THREE.PlaneGeometry(w * 1.6, h * 1.6, 80, 60);
     const pos = grassGeo.getAttribute('position');
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i); const z = pos.getZ(i);
-      pos.setY(i, Math.sin(x * 1.2) * Math.cos(z * 1.5) * 0.08 + Math.sin(x * 4) * Math.cos(z * 3) * 0.02);
+      pos.setY(i, Math.sin(x * 1.2) * Math.cos(z * 1.5) * 0.06 + Math.sin(x * 4) * Math.cos(z * 3) * 0.02);
     }
     grassGeo.computeVertexNormals();
 
-    const colors = new Float32Array(pos.count * 3);
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i); const z = pos.getZ(i);
-      const n = (Math.sin(x * 5 + 0.5) * Math.cos(z * 4) + 1) * 0.5;
-      const base = 0.25 + n * 0.1;
-      colors[i * 3]     = base * 0.45;
-      colors[i * 3 + 1] = base * 1.4;
-      colors[i * 3 + 2] = base * 0.25;
-    }
-    grassGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const grass = new THREE.Mesh(grassGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    const grass = new THREE.Mesh(grassGeo, new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.9,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    }));
     grass.rotation.x = -Math.PI / 2;
     grass.receiveShadow = true;
     grass.position.y = GROUND_Y;
     this.group.add(grass);
   }
 
-  /** 凹陷路面 */
+  /** 凹陷路面 — canvas 石砖纹理 */
   private buildPath(pathTiles: Set<string>): void {
     const ts = TILE_SIZE * ThreeRenderer.SCALE;
     const tiles = Array.from(pathTiles);
     const dummy = new THREE.Object3D();
 
+    // canvas 石砖纹理
+    const texSize = 128;
+    const cv = document.createElement('canvas');
+    cv.width = texSize; cv.height = texSize;
+    const cx = cv.getContext('2d')!;
+    cx.fillStyle = '#7a6345';
+    cx.fillRect(0, 0, texSize, texSize);
+    // 砖缝
+    cx.strokeStyle = '#4a3a20';
+    cx.lineWidth = 2;
+    for (let y = 0; y < texSize; y += 32) {
+      cx.beginPath(); cx.moveTo(0, y); cx.lineTo(texSize, y); cx.stroke();
+      const offset = (y / 32) % 2 === 0 ? 0 : 32;
+      for (let x = offset; x < texSize; x += 64) {
+        cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x, y + 32); cx.stroke();
+      }
+    }
+    // 噪点
+    for (let i = 0; i < 1000; i++) {
+      const x = Math.random() * texSize, y = Math.random() * texSize;
+      const v = 80 + Math.random() * 50;
+      cx.fillStyle = `rgba(${v},${v * 0.8},${v * 0.5},0.3)`;
+      cx.fillRect(x, y, 1, 1);
+    }
+    const pathTex = new THREE.CanvasTexture(cv);
+    pathTex.wrapS = pathTex.wrapT = THREE.RepeatWrapping;
+
     const pathMesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(ts * 0.99, 0.04, ts * 0.99),
-      new THREE.MeshLambertMaterial({ color: 0x7a6345 }),
+      new THREE.MeshStandardMaterial({ map: pathTex, roughness: 0.85, metalness: 0.05 }),
       tiles.length,
     );
     pathMesh.receiveShadow = true;

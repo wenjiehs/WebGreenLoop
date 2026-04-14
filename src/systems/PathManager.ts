@@ -63,26 +63,26 @@ export class PathManager {
     const bottom = mapRows - margin - 1;
 
     // 标记跑道瓦片（2格宽的方形环）
-    // 上边 (从 left 到 right, 行 = top-hw 到 top+hw-1)
-    for (let col = left - hw; col <= right + hw; col++) {
+    // 上边横条 (不含角落，角落由竖条处理)
+    for (let col = left; col <= right; col++) {
       for (let w = -hw; w < hw; w++) {
         this.pathTiles.add(`${col},${top + w}`);
       }
     }
-    // 下边
-    for (let col = left - hw; col <= right + hw; col++) {
+    // 下边横条
+    for (let col = left; col <= right; col++) {
       for (let w = -hw; w < hw; w++) {
         this.pathTiles.add(`${col},${bottom + w}`);
       }
     }
-    // 左边
-    for (let row = top - hw; row <= bottom + hw; row++) {
+    // 左边竖条 (包含角落)
+    for (let row = top - hw; row <= bottom + hw - 1; row++) {
       for (let w = -hw; w < hw; w++) {
         this.pathTiles.add(`${left + w},${row}`);
       }
     }
-    // 右边
-    for (let row = top - hw; row <= bottom + hw; row++) {
+    // 右边竖条 (包含角落)
+    for (let row = top - hw; row <= bottom + hw - 1; row++) {
       for (let w = -hw; w < hw; w++) {
         this.pathTiles.add(`${right + w},${row}`);
       }

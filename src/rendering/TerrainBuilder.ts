@@ -66,17 +66,17 @@ export class TerrainBuilder {
     const tiles = Array.from(pathTiles);
     const dummy = new THREE.Object3D();
 
-    // 路面（凹陷到地面以下 — 像挖出来的路）
+    // 路面（深凹陷 — 像挖出来的沟渠）
     const pathMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(ts * 0.97, 0.12, ts * 0.97),
-      new THREE.MeshLambertMaterial({ color: 0x9b8365 }),
+      new THREE.BoxGeometry(ts * 0.97, 0.15, ts * 0.97),
+      new THREE.MeshLambertMaterial({ color: 0x8a7355 }),
       tiles.length,
     );
     pathMesh.receiveShadow = true;
 
     tiles.forEach((key, i) => {
       const [c, r] = key.split(',').map(Number);
-      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, -0.03);
+      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, -0.10);
       dummy.position.copy(p);
       dummy.updateMatrix();
       pathMesh.setMatrixAt(i, dummy.matrix);
@@ -92,7 +92,7 @@ export class TerrainBuilder {
     const lineVerts: number[] = [];
     tiles.forEach(key => {
       const [c, r] = key.split(',').map(Number);
-      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0.085);
+      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, -0.02);
       const half = ts * 0.48;
       lineVerts.push(p.x - half, p.y, p.z, p.x + half, p.y, p.z);
       lineVerts.push(p.x, p.y, p.z - half, p.x, p.y, p.z + half);
@@ -114,10 +114,10 @@ export class TerrainBuilder {
 
     if (edgeTiles.length === 0) return;
 
-    // 路沿石（高于路面，形成明显边框）
+    // 路沿石（在地面高度，路面在下方，形成高低差）
     const borderMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(ts * 1.02, 0.2, ts * 1.02),
-      new THREE.MeshLambertMaterial({ color: 0x6a5a42 }),
+      new THREE.BoxGeometry(ts * 1.02, 0.15, ts * 1.02),
+      new THREE.MeshLambertMaterial({ color: 0x7a6a52 }),
       edgeTiles.length,
     );
     borderMesh.receiveShadow = true;
@@ -125,7 +125,7 @@ export class TerrainBuilder {
 
     edgeTiles.forEach((key, i) => {
       const [c, r] = key.split(',').map(Number);
-      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0.1);
+      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0.05);
       dummy.position.copy(p);
       dummy.updateMatrix();
       borderMesh.setMatrixAt(i, dummy.matrix);

@@ -73,21 +73,29 @@ export class TowerModelFactory {
     return group;
   }
 
-  // 箭塔 - 方底+尖顶+窗口
+  // 箭塔 - 六边形底+城垛+尖顶+窗口
   private static buildArrowTower(g: THREE.Group, color: THREE.Color, h: number, lv: number): void {
     const base = new THREE.Mesh(
-      new THREE.BoxGeometry(0.45, h, 0.45),
-      new THREE.MeshLambertMaterial({ color }),
+      new THREE.CylinderGeometry(0.22, 0.26, h, 6),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.1 }),
     );
     base.position.y = h / 2;
     base.castShadow = true;
     g.add(base);
 
+    // 装饰横条
+    const band = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.24, 0.02, 6),
+      new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, 0, -0.1), roughness: 0.5, metalness: 0.2 }),
+    );
+    band.position.y = h * 0.6;
+    g.add(band);
+
     // 城垛（顶部4个小方块）
     for (const [dx, dz] of [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]]) {
       const merlon = new THREE.Mesh(
         new THREE.BoxGeometry(0.08, 0.06, 0.08),
-        new THREE.MeshLambertMaterial({ color: color.clone().offsetHSL(0, 0, -0.05) }),
+        new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, 0, -0.05), roughness: 0.6 }),
       );
       merlon.position.set(dx, h + 0.03, dz);
       merlon.castShadow = true;

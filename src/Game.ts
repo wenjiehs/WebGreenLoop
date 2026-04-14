@@ -400,7 +400,7 @@ export class Game {
     this.heroTower.setEnemies(this.enemies);
     this.heroTower.onProjectileHit = (x, y, dmg, sp, at, special) => this.handleProjectileHit(x, y, dmg, sp, at as AttackType, special, null, true);
     this.heroTower.onFireProjectile = (fx, fy, tx, ty, color, aoe) => this.entityRenderer.spawnProjectile(fx, fy, tx, ty, color, aoe);
-    this.heroTower.onLevelUp = () => { this.showMessage(`⭐ ${heroConfig.name} 升级！`); soundManager.playUpgrade(); };
+    this.heroTower.onLevelUp = () => { this.showMessage(`⭐ ${heroConfig.name} 升级！`); soundManager.playHeroLevelUp(); };
 
     this.phase = 'playing';
     soundManager.playBuild();
@@ -812,6 +812,10 @@ export class Game {
       soundManager.playWaveStart(); soundManager.startGameBGM();
       this.entityRenderer.showWaveBanner(`WAVE ${waveNum}`, '#44FF44');
     }
+    // Phase 3.1: 新手引导提示
+    if (waveNum === 1) setTimeout(() => this.showMessage('💡 提示: 点击下方商店选塔，再点击地图建造'), 2000);
+    if (waveNum === 2) setTimeout(() => this.showMessage('💡 提示: 按 N 键可提前开始下一波，按 H 键查看克制表'), 2000);
+    if (waveNum === 3) setTimeout(() => this.showMessage('💡 提示: 点击英雄塔可加属性点和学习技能'), 2000);
   }
 
   private onVictory(): void {
@@ -895,18 +899,35 @@ export class Game {
     const highScore = this.getHighScore();
     const isNewRecord = stats.score >= highScore && stats.score > 0;
 
+    // 详细统计
+    const heroStats = this.heroTower ? `
+      <p>🦸 英雄: ${this.heroTower.config.name} Lv.${this.heroTower.getHeroLevel()}</p>
+      <p style="font-size:14px;color:#AAA;">💪${this.heroTower.getStr()} 🏃${this.heroTower.getAgi()} 🧠${this.heroTower.getInt()} | 💀${this.heroTower.getKillCount()}击杀</p>
+    ` : '';
+
+    // 最强塔统计
+    let topTower = '';
+    if (this.towers.length > 0) {
+      const best = [...this.towers].sort((a, b) => b.getKillCount() - a.getKillCount())[0];
+      topTower = `<p style="font-size:14px;color:#AAA;">🏅 最佳塔: ${best.config.name} Lv.${best.level + 1} (${best.getKillCount()}击杀)</p>`;
+    }
+
+    const summonCount = this.heroTower?.summons.length || 0;
+
     this.uiRoot.innerHTML = `
-      <div style="pointer-events:auto;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,10,26,0.9);">
-        <h1 style="font-size:56px;color:${victory ? '#44FF44' : '#FF4444'};">${victory ? '🎉 胜 利 🎉' : '💀 失 败'}</h1>
+      <div style="pointer-events:auto;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(10,10,26,0.95),rgba(5,5,15,0.98));">
+        <h1 style="font-size:56px;color:${victory ? '#44FF44' : '#FF4444'};text-shadow:0 0 20px ${victory ? '#44FF4444' : '#FF444444'};">${victory ? '🎉 胜 利 🎉' : '💀 失 败'}</h1>
         ${reason ? `<p style="color:#FF8888;margin-bottom:12px;">${reason}</p>` : ''}
-        <div style="color:#FFF;font-size:18px;line-height:2;margin:16px 0;">
-          <p>波次: ${stats.wave}/50 | 击杀: ${stats.kills}</p>
-          <p>得分: ${stats.score} | PF: ${stats.pf}</p>
-          <p style="color:#FFD700;">🏆 最高分: ${highScore}${isNewRecord ? ' 🆕 新纪录！' : ''}</p>
+        <div style="color:#FFF;font-size:18px;line-height:1.8;margin:16px 0;text-align:center;background:rgba(255,255,255,0.05);padding:16px 32px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);">
+          <p>🌊 波次: ${stats.wave}/50 | 💀 击杀: ${stats.kills} | 🏗️ 塔: ${this.towers.length}座</p>
+          <p>⭐ 得分: ${stats.score} | 🎯 PF: ${stats.pf}${summonCount > 0 ? ` | 🐾 召唤物: ${summonCount}` : ''}</p>
+          ${heroStats}
+          ${topTower}
+          <p style="color:#FFD700;font-size:20px;margin-top:8px;">🏆 最高分: ${highScore}${isNewRecord ? ' 🆕 新纪录！' : ''}</p>
         </div>
-        <div style="display:flex;gap:16px;">
-          <button onclick="window.__game?.restart()" style="pointer-events:auto;padding:12px 36px;background:#336633;border:2px solid #44FF44;color:#FFF;font-size:18px;cursor:pointer;border-radius:6px;font-family:inherit;">🔄 重新开始</button>
-          <button onclick="window.__game?.backToMenu()" style="pointer-events:auto;padding:12px 36px;background:#2a2a3e;border:2px solid #8888CC;color:#FFF;font-size:18px;cursor:pointer;border-radius:6px;font-family:inherit;">🏠 返回菜单</button>
+        <div style="display:flex;gap:16px;margin-top:8px;">
+          <button onclick="window.__game?.restart()" style="pointer-events:auto;padding:12px 36px;background:linear-gradient(135deg,#2a5a2a,#336633);border:2px solid #44FF44;color:#FFF;font-size:18px;cursor:pointer;border-radius:6px;font-family:inherit;box-shadow:0 4px 12px rgba(68,255,68,0.2);">🔄 重新开始</button>
+          <button onclick="window.__game?.backToMenu()" style="pointer-events:auto;padding:12px 36px;background:linear-gradient(135deg,#1a1a3e,#2a2a4e);border:2px solid #8888CC;color:#FFF;font-size:18px;cursor:pointer;border-radius:6px;font-family:inherit;box-shadow:0 4px 12px rgba(136,136,204,0.2);">🏠 返回菜单</button>
         </div>
       </div>`;
   }

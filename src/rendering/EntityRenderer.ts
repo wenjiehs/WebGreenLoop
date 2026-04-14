@@ -202,9 +202,26 @@ export class EntityRenderer {
       // 高度
       if (enemy.isFlying()) {
         sync.model.position.y = 0.6 + Math.sin(time * 0.003 + sync.walkPhase) * 0.06;
+        // 翅膀扇动
+        const wingL = sync.model.getObjectByName('wingL');
+        const wingR = sync.model.getObjectByName('wingR');
+        if (wingL && wingR) {
+          const flap = Math.sin(time * 0.008 + sync.walkPhase) * 0.4;
+          wingL.rotation.z = -0.3 - flap;
+          wingR.rotation.z = 0.3 + flap;
+        }
       } else {
         sync.walkPhase += 0.12;
         sync.model.position.y = Math.abs(Math.sin(sync.walkPhase)) * 0.025;
+      }
+
+      // Boss 发光脉冲
+      if (enemy.config.isBoss) {
+        const bossBody = sync.model.getObjectByName('bossBody');
+        if (bossBody) {
+          const mat = (bossBody as THREE.Mesh).material as THREE.MeshStandardMaterial;
+          mat.emissiveIntensity = 0.2 + Math.sin(time * 0.004) * 0.15;
+        }
       }
 
       // 血条

@@ -220,7 +220,7 @@ export class EnemyModelFactory {
     body.castShadow = true;
     g.add(body);
 
-    // 翅膀
+    // 翅膀（命名以便扇动动画）
     for (const side of [-1, 1]) {
       const wing = new THREE.Mesh(
         new THREE.PlaneGeometry(bs * 2.5, bs * 0.6),
@@ -229,6 +229,7 @@ export class EnemyModelFactory {
       wing.position.set(side * bs * 0.8, 0, 0);
       wing.rotation.x = -Math.PI / 10;
       wing.rotation.z = side * 0.2;
+      wing.name = side === -1 ? 'wingL' : 'wingR';
       g.add(wing);
     }
 
@@ -258,13 +259,14 @@ export class EnemyModelFactory {
     const scale = 1.5;
     const sbs = bs * scale;
 
-    // 巨大身体
+    // 巨大身体（PBR 材质更好的光照效果）
     const body = new THREE.Mesh(
       new THREE.DodecahedronGeometry(sbs * 1.2, 1),
-      new THREE.MeshPhongMaterial({ color, emissive: 0x331100, emissiveIntensity: 0.25, shininess: 30 }),
+      new THREE.MeshStandardMaterial({ color, emissive: 0x331100, emissiveIntensity: 0.3, roughness: 0.4, metalness: 0.3 }),
     );
     body.position.y = sbs * 1.2;
     body.castShadow = true;
+    body.name = 'bossBody'; // 用于运行时脉冲动画
     g.add(body);
 
     // 头

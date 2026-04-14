@@ -100,6 +100,17 @@ export class SoundManager {
     setTimeout(() => this.playTone(880, 0.08, 'sine', 0.3), 210);
   }
 
+  playHeroLevelUp(): void {
+    // 更华丽的五音上行 + 和弦结尾
+    this.playTone(440, 0.08, 'sine', 0.3);
+    setTimeout(() => this.playTone(554, 0.08, 'sine', 0.3), 80);
+    setTimeout(() => this.playTone(659, 0.08, 'sine', 0.3), 160);
+    setTimeout(() => this.playTone(880, 0.08, 'sine', 0.35), 240);
+    setTimeout(() => this.playTone(1108, 0.12, 'sine', 0.35), 320);
+    // 和弦
+    setTimeout(() => { this.playTone(880, 0.15, 'sine', 0.2); this.playTone(1108, 0.15, 'sine', 0.2); this.playTone(1318, 0.15, 'sine', 0.15); }, 440);
+  }
+
   playSell(): void {
     this.playTone(500, 0.05, 'triangle', 0.2);
     setTimeout(() => this.playTone(350, 0.05, 'triangle', 0.2), 80);

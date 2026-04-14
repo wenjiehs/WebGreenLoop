@@ -69,6 +69,10 @@ export class Game {
   // B4: RP 事件
   private rpEventTimer: number = 0;
   private rpEventInterval: number = 45000; // 45秒一次
+  private statsVisible: boolean = false;
+
+  // 2.1: TopBar DOM 缓存
+  private topBarRefs: Record<string, HTMLElement | null> = {};
 
   // UI DOM
   private uiRoot!: HTMLElement;
@@ -247,6 +251,7 @@ export class Game {
         case 's': case 'S': if (this.selectedTower && !this.heroTower?.isSelected) this.sellTower(this.selectedTower); break;
         case 'm': case 'M': this.startHeroMove(); break;
         case 'h': case 'H': this.toggleHelp(); break;
+        case 'Tab': e.preventDefault(); this.toggleStatsPanel(); break;
         default:
           const num = parseInt(e.key);
           if (num >= 1 && num <= 9) {
@@ -349,11 +354,11 @@ export class Game {
       const c = `#${hero.color.toString(16).padStart(6, '0')}`;
       const diffLabels: Record<string, string> = { easy: '★ 新手推荐', medium: '★★ 中等', hard: '★★★ 困难' };
       html += `<div class="hero-card" data-hero="${hero.id}" style="pointer-events:auto;cursor:pointer;width:280px;padding:16px;background:#1a1a2e;border:2px solid ${c};border-radius:8px;">
-        <h3 style="color:${c};font-size:20px;margin:0;">${hero.name}</h3>
+        <h3 style="color:${c};font-size:20px;margin:0;">${hero.name} ${hero.difficulty === 'easy' ? '<span style="color:#44FF44;font-size:11px;">✅推荐</span>' : ''}</h3>
         <p style="color:#888;font-size:12px;">${hero.title}</p>
         <p style="color:#CCC;font-size:11px;margin:8px 0;">${hero.description}</p>
         <p style="color:#88AACC;font-size:10px;">力+${hero.strGrowth} 敏+${hero.agiGrowth} 智+${hero.intGrowth}</p>
-        <p style="color:#AAA;font-size:10px;">攻击: ${hero.baseAttackType}</p>
+        <p style="color:#AAA;font-size:10px;">攻击: ${hero.baseAttackType} | 👥 占${hero.populationCost}人口</p>
         <div style="margin:8px 0;border-top:1px solid #333;padding-top:6px;">
           ${hero.skills.map(s => `<p style="color:#DDDDAA;font-size:10px;">• ${s.name} - ${s.description.substring(0, 20)}</p>`).join('')}
         </div>
@@ -401,6 +406,14 @@ export class Game {
     this.heroTower.onProjectileHit = (x, y, dmg, sp, at, special) => this.handleProjectileHit(x, y, dmg, sp, at as AttackType, special, null, true);
     this.heroTower.onFireProjectile = (fx, fy, tx, ty, color, aoe) => this.entityRenderer.spawnProjectile(fx, fy, tx, ty, color, aoe);
     this.heroTower.onLevelUp = () => { this.showMessage(`⭐ ${heroConfig.name} 升级！`); soundManager.playHeroLevelUp(); };
+    this.heroTower.onSkillCost = (gold, wood) => {
+      if (!this.economyManager.canAffordGoldAndWood(gold, wood)) {
+        this.showMessage(`💰 不够！需要 ${gold}金${wood > 0 ? ` + ${wood}木` : ''}`);
+        soundManager.playError();
+        return false;
+      }
+      return this.economyManager.spendGoldAndWood(gold, wood);
+    };
 
     this.phase = 'playing';
     soundManager.playBuild();
@@ -432,7 +445,19 @@ export class Game {
       <div id="info-panel" style="pointer-events:auto;display:none;position:absolute;right:8px;top:50px;width:200px;background:rgba(20,20,40,0.95);border:1px solid #44FF44;border-radius:6px;padding:10px;color:#FFF;font-size:11px;z-index:20;"></div>`;
 
     this.messageEl = this.uiRoot.querySelector('#message-bar')!;
-    this.minimapCanvas = null; // 重建 UI 后清除缓存
+    this.minimapCanvas = null;
+    // 2.1: 缓存 TopBar DOM
+    this.topBarRefs = {
+      gold: this.uiRoot.querySelector('#gold-text'),
+      wood: this.uiRoot.querySelector('#wood-text'),
+      wave: this.uiRoot.querySelector('#wave-text'),
+      pop: this.uiRoot.querySelector('#pop-text'),
+      score: this.uiRoot.querySelector('#score-text'),
+      enemy: this.uiRoot.querySelector('#enemy-count'),
+      speed: this.uiRoot.querySelector('#speed-text'),
+      nextWave: this.uiRoot.querySelector('#next-wave-text'),
+      bossTimer: this.uiRoot.querySelector('#boss-timer'),
+    };
     this.createShop();
 
     // 经济回调
@@ -517,48 +542,32 @@ export class Game {
   }
 
   private updateTopBar(): void {
-    const g = this.uiRoot.querySelector('#gold-text');
-    const wd = this.uiRoot.querySelector('#wood-text');
-    const w = this.uiRoot.querySelector('#wave-text');
-    const p = this.uiRoot.querySelector('#pop-text');
-    const s = this.uiRoot.querySelector('#score-text');
-    const e = this.uiRoot.querySelector('#enemy-count');
-    const sp = this.uiRoot.querySelector('#speed-text');
-    const nw = this.uiRoot.querySelector('#next-wave-text');
-    const bt = this.uiRoot.querySelector('#boss-timer');
+    const r = this.topBarRefs;
+    if (r.gold) r.gold.textContent = `💰 ${this.economyManager.getGold()}`;
+    if (r.wood) r.wood.textContent = `🪵 ${this.economyManager.getWood()}`;
+    if (r.pop) r.pop.textContent = `👥 ${this.economyManager.getPopulation()}/${this.economyManager.getMaxPopulation()}`;
+    if (r.score) r.score.textContent = `⭐ ${this.economyManager.getScore()}`;
+    if (r.enemy) { const alive = this.enemies.length; r.enemy.textContent = `怪物: ${alive}/${MAX_ENEMIES_ON_MAP}`; r.enemy.style.color = alive > 80 ? '#FF4444' : alive > 50 ? '#FFAA00' : '#88FF88'; }
+    if (r.speed) r.speed.textContent = `⏩ x${this.gameSpeed}`;
 
-    if (g) g.textContent = `💰 ${this.economyManager.getGold()}`;
-    if (wd) wd.textContent = `🪵 ${this.economyManager.getWood()}`;
-    if (p) p.textContent = `👥 ${this.economyManager.getPopulation()}/${this.economyManager.getMaxPopulation()}`;
-    if (s) s.textContent = `⭐ ${this.economyManager.getScore()}`;
-    if (e) { const alive = this.enemies.length; e.textContent = `怪物: ${alive}/${MAX_ENEMIES_ON_MAP}`; (e as HTMLElement).style.color = alive > 80 ? '#FF4444' : alive > 50 ? '#FFAA00' : '#88FF88'; }
-    if (sp) sp.textContent = `⏩ x${this.gameSpeed}`;
-
-    // A4: 波次模式标记
-    if (w) {
+    if (r.wave) {
       const mode = this.waveManager.getGameMode();
       const wn = this.waveManager.getCurrentWave();
-      if (mode === 'hidden') w.textContent = `🌟 隐藏关: ${wn - 50}/10`;
-      else if (mode === 'endless') w.textContent = `♾️ 无尽 #${wn - 60} (x${Math.round(this.waveManager.getEndlessScaling() * 100)}%)`;
-      else w.textContent = `波次: ${wn}/50`;
+      if (mode === 'hidden') r.wave.textContent = `🌟 隐藏关: ${wn - 50}/10`;
+      else if (mode === 'endless') r.wave.textContent = `♾️ 无尽 #${wn - 60} (x${Math.round(this.waveManager.getEndlessScaling() * 100)}%)`;
+      else r.wave.textContent = `波次: ${wn}/50`;
     }
 
-    // A4: Boss 倒计时
-    if (bt) {
+    if (r.bossTimer) {
       const bossRemaining = this.waveManager.getBossTimeRemaining();
-      if (bossRemaining > 0) {
-        (bt as HTMLElement).style.display = 'inline';
-        bt.textContent = `⏱ BOSS: ${Math.ceil(bossRemaining / 1000)}s`;
-      } else {
-        (bt as HTMLElement).style.display = 'none';
-      }
+      if (bossRemaining > 0) { r.bossTimer.style.display = 'inline'; r.bossTimer.textContent = `⏱ BOSS: ${Math.ceil(bossRemaining / 1000)}s`; }
+      else r.bossTimer.style.display = 'none';
     }
 
-    // 下一波倒计时
-    if (nw && this.waveManager.isWaitingForNextWave()) {
+    if (r.nextWave && this.waveManager.isWaitingForNextWave()) {
       const remaining = this.waveManager.getNextWaveCountdown();
-      nw.textContent = remaining > 0 ? `下一波: ${Math.ceil(remaining / 1000)}s | 按N提前` : '';
-    } else if (nw) nw.textContent = '';
+      r.nextWave.textContent = remaining > 0 ? `下一波: ${Math.ceil(remaining / 1000)}s | 按N提前` : '';
+    } else if (r.nextWave) r.nextWave.textContent = '';
   }
 
   // ======================= 选择/建造 =======================
@@ -870,9 +879,11 @@ export class Game {
         ${h.config.skills.map((s, i) => {
           const lv = h.getSkillLevel(i);
           const canLearn = h.canLearnSkill(i);
+          const [gc, wc] = h.getSkillCost(i);
+          const costStr = gc > 0 ? ` 💰${gc}${wc > 0 ? `+🪵${wc}` : ''}` : '';
           return `<div style="display:flex;justify-content:space-between;align-items:center;margin:2px 0;">
             <span style="color:${lv > 0 ? '#DDDDAA' : '#666'};font-size:10px;">${s.name} Lv.${lv}/${s.maxLevel}</span>
-            ${canLearn ? `<button onclick="window.__game?.heroTower?.learnSkill(${i});window.__game?.showHeroInfo()" style="pointer-events:auto;padding:1px 6px;background:#333;border:1px solid #FFCC44;color:#FFCC44;cursor:pointer;border-radius:2px;font-size:9px;">学习</button>` : ''}
+            ${canLearn ? `<button onclick="window.__game?.heroTower?.learnSkill(${i});window.__game?.showHeroInfo()" style="pointer-events:auto;padding:1px 6px;background:#333;border:1px solid #FFCC44;color:#FFCC44;cursor:pointer;border-radius:2px;font-size:9px;">学习${costStr}</button>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -986,6 +997,44 @@ export class Game {
     } else {
       overlay.style.display = 'none';
     }
+  }
+
+  /** 1.3: Tab 键 DPS 统计面板 */
+  private toggleStatsPanel(): void {
+    this.statsVisible = !this.statsVisible;
+    let panel = this.uiRoot.querySelector('#stats-panel') as HTMLElement;
+    if (!this.statsVisible) { if (panel) panel.remove(); return; }
+
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'stats-panel';
+      panel.style.cssText = 'pointer-events:auto;position:absolute;left:8px;top:50px;width:220px;background:rgba(10,10,30,0.92);border:1px solid #886622;border-radius:6px;padding:10px;color:#FFF;font-size:11px;z-index:25;';
+      this.uiRoot.appendChild(panel);
+    }
+
+    // 按击杀排行
+    const allUnits = [
+      ...this.towers.map(t => ({ name: `${t.config.name} Lv.${t.level + 1}`, kills: t.getKillCount(), color: '#88FF88' })),
+      ...(this.heroTower ? [{ name: `🦸 ${this.heroTower.config.name} Lv.${this.heroTower.getHeroLevel()}`, kills: this.heroTower.getKillCount(), color: '#FFD700' }] : []),
+    ].sort((a, b) => b.kills - a.kills).slice(0, 8);
+
+    const totalKills = this.economyManager.getTotalKills();
+    const gameTime = Math.floor((performance.now() - this.lastTime) / 1000);
+
+    panel.innerHTML = `
+      <h3 style="color:#886622;margin:0 0 6px;">📊 战斗统计 <span style="font-size:9px;color:#666;">Tab关闭</span></h3>
+      <p style="color:#AAA;">🌊 波次: ${this.waveManager.getCurrentWave()} | 💀 总击杀: ${totalKills}</p>
+      <p style="color:#AAA;">🏗️ 塔: ${this.towers.length}座 | 👥 人口: ${this.economyManager.getPopulation()}/${this.economyManager.getMaxPopulation()}</p>
+      <div style="border-top:1px solid #333;margin:6px 0;padding-top:4px;">
+        <p style="color:#886622;font-size:10px;">🏅 击杀排行</p>
+        ${allUnits.map((u, i) => {
+          const pct = totalKills > 0 ? Math.round(u.kills / totalKills * 100) : 0;
+          return `<div style="display:flex;justify-content:space-between;margin:1px 0;">
+            <span style="color:${u.color};font-size:10px;">${i + 1}. ${u.name}</span>
+            <span style="color:#AAA;font-size:10px;">${u.kills} (${pct}%)</span>
+          </div>`;
+        }).join('')}
+      </div>`;
   }
 
   private renderDamageRow(name: string, values: number[]): string {

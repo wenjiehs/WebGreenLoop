@@ -60,6 +60,9 @@ export class EntityRenderer {
     this.renderer.scene.add(terrain);
     this.terrainGroup = terrain;
 
+    // 1.4: 环境粒子（萤火虫）
+    this.spawnEnvironmentParticles();
+
     // 出生点标记 — 更大更醒目
     const spawn = pathManager.getSpawnPoint();
     const pos = ThreeRenderer.toWorld(spawn.x, spawn.y, 0);
@@ -159,6 +162,18 @@ export class EntityRenderer {
       } else {
         sync.model.position.y = 0;
         sync.model.scale.setScalar(MODEL_SCALE);
+      }
+
+      // 1.5: 光环塔浮空动画
+      if (tower.config.special === 'aura_attack' || tower.config.special === 'aura_speed') {
+        const t = performance.now() * 0.002;
+        const diamond = sync.model.children.find(c => c.type === 'Mesh' && c.position.y > 0.2);
+        if (diamond) {
+          diamond.position.y = 0.25 + Math.sin(t + tower.x * 0.1) * 0.06;
+          diamond.rotation.y = t * 0.3;
+        }
+        const ring = sync.model.children.find(c => c.type === 'Mesh' && Math.abs(c.rotation.x - Math.PI / 2) < 0.1);
+        if (ring) ring.rotation.z = t * 0.2;
       }
     }
   }
@@ -493,6 +508,39 @@ export class EntityRenderer {
     });
   }
 
+  // 1.4: 环境粒子
+  private envParticles: THREE.Points | null = null;
+  private spawnEnvironmentParticles(): void {
+    const count = 20;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 8;
+      positions[i * 3 + 1] = 0.3 + Math.random() * 1.5;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 6;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    this.envParticles = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0x88FF88, size: 0.04, transparent: true, opacity: 0.5, sizeAttenuation: true,
+    }));
+    this.renderer.scene.add(this.envParticles);
+
+    // 飘动动画
+    const animate = () => {
+      if (!this.envParticles) return;
+      const pos = this.envParticles.geometry.getAttribute('position');
+      const t = performance.now() * 0.0005;
+      for (let i = 0; i < count; i++) {
+        pos.setY(i, pos.getY(i) + Math.sin(t + i * 1.7) * 0.001);
+        pos.setX(i, pos.getX(i) + Math.cos(t * 0.7 + i * 2.3) * 0.0005);
+      }
+      pos.needsUpdate = true;
+      (this.envParticles.material as THREE.PointsMaterial).opacity = 0.3 + Math.sin(t * 2) * 0.15;
+      requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }
+
   reset(): void {
     this.towerSyncs.clear(); this.enemySyncs.clear(); this.summonSyncs.clear(); this.heroSync = null;
     this.clearSelection(); this.clearBuildPreview();
@@ -502,6 +550,7 @@ export class EntityRenderer {
     if (this.spawnPillar) { this.renderer.scene.remove(this.spawnPillar); this.spawnPillar = null; }
     this.spawnExtras.forEach(o => this.renderer.scene.remove(o));
     this.spawnExtras = [];
+    if (this.envParticles) { this.renderer.scene.remove(this.envParticles); this.envParticles = null; }
     this.terrainBuilt = false;
   }
 

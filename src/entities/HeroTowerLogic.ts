@@ -119,12 +119,32 @@ export class HeroTowerLogic {
   addAgi(pts: number = 1): boolean { if (this.freePoints < pts) return false; this.agi += pts; this.freePoints -= pts; this.recalculateStats(); return true; }
   addInt(pts: number = 1): boolean { if (this.freePoints < pts) return false; this.int += pts; this.freePoints -= pts; this.recalculateStats(); return true; }
 
+  // 技能升级消耗表: [金, 木]
+  static SKILL_COSTS: [number, number][] = [
+    [0, 0],       // 1级免费
+    [100, 0],     // 2级
+    [300, 1],     // 3级
+    [800, 3],     // 4级
+    [2000, 5],    // 5级
+  ];
+
+  onSkillCost?: (gold: number, wood: number) => boolean; // 返回 false = 买不起
+
   learnSkill(skillIndex: number): boolean {
     if (this.skillPoints <= 0 || skillIndex < 0 || skillIndex >= this.config.skills.length) return false;
     const skill = this.config.skills[skillIndex];
     const existing = this.learnedSkills.find(s => s.skill.id === skill.id);
+    const nextLevel = existing ? existing.level + 1 : 1;
+    if (existing && existing.level >= skill.maxLevel) return false;
+
+    // 检查金/木消耗
+    const costIdx = Math.min(nextLevel - 1, HeroTowerLogic.SKILL_COSTS.length - 1);
+    const [goldCost, woodCost] = HeroTowerLogic.SKILL_COSTS[costIdx];
+    if (goldCost > 0 || woodCost > 0) {
+      if (!this.onSkillCost?.(goldCost, woodCost)) return false;
+    }
+
     if (existing) {
-      if (existing.level >= skill.maxLevel) return false;
       existing.level += 1;
       if (skill.isActive) { const st = this.activeSkillStates.get(skill.id); if (st) st.level = existing.level; }
     } else {
@@ -134,6 +154,15 @@ export class HeroTowerLogic {
     this.skillPoints -= 1;
     this.recalculateStats();
     return true;
+  }
+
+  getSkillCost(skillIndex: number): [number, number] {
+    const skill = this.config.skills[skillIndex];
+    if (!skill) return [0, 0];
+    const existing = this.learnedSkills.find(s => s.skill.id === skill.id);
+    const nextLevel = existing ? existing.level + 1 : 1;
+    const costIdx = Math.min(nextLevel - 1, HeroTowerLogic.SKILL_COSTS.length - 1);
+    return HeroTowerLogic.SKILL_COSTS[costIdx];
   }
 
   getSkillLevel(skillIndex: number): number {

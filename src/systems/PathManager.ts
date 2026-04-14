@@ -3,31 +3,19 @@ import { TILE_SIZE, GAME_WIDTH, GAME_HEIGHT } from '../utils/constants';
 export interface Vec2 { x: number; y: number; }
 
 /**
- * 绿色循环圈 路径管理器
+ * 绿色循环圈 路径管理器 — 操场跑道形状
  *
- * 原版地图结构：
- * - 一条闭合的方形环跑道（2格宽），怪物在上面无限循环跑圈
- * - 跑道中心线大约在距地图边缘 6-7 格的位置
- * - 出怪口在跑道左上角附近
- * - 玩家在跑道**外侧**（外圈）和**内侧**（内圈）两侧建造防御塔
- * - 怪物从出怪口出生后，沿跑道顺时针跑圈，永远不会自行消失
+ * 形状：两段平行直线 + 两个半圆弧（椭圆跑道）
  *
- * 地图示意（40×18格，去掉底部UI区）：
+ *        ╭──────────────────────╮
+ *       ╱                        ╲
+ *      │    内圈建造区              │
+ *      │                          │  ← 跑道（2格宽）
+ *       ╲                        ╱
+ *        ╰──────────────────────╯
  *
- *   ┌─────────────────────────────────────┐
- *   │  外圈建造区                           │
- *   │    ┌───────────────────────────┐     │
- *   │    │  ★出怪口                   │     │
- *   │    │  ═══════════════════════►  │     │
- *   │    │  ║                      ║  │     │
- *   │    │  ║    内圈建造区          ║  │     │
- *   │    │  ║                      ║  │     │
- *   │    │  ◄═══════════════════════  │     │
- *   │    └───────────────────────────┘     │
- *   │  外圈建造区                           │
- *   └─────────────────────────────────────┘
- *
- * 跑道宽度 = 2格，中心线走的是这 2 格的中间
+ * 怪物从左侧中点（出怪口）出生，顺时针跑
+ * 跑道外侧和内侧都可以建塔
  */
 export class PathManager {
   private waypoints: Vec2[] = [];
@@ -35,114 +23,128 @@ export class PathManager {
   private buildableTiles: Set<string> = new Set();
   private spawnPoint: Vec2 = { x: 0, y: 0 };
 
-  // 跑道参数
-  private readonly trackMargin = 5;  // 跑道中心线距地图边缘的格数
-  private readonly trackWidth = 2;   // 跑道宽度（格数）
+  // 跑道参数（像素坐标）
+  private centerX: number;
+  private centerY: number;
+  private straightLen: number;  // 直线段半长（像素）
+  private radiusY: number;      // 半圆半径（像素）
+  private trackWidth = 2;       // 格数
 
   constructor() {
+    const cols = Math.floor(GAME_WIDTH / TILE_SIZE);          // 40
+    const mapRows = Math.floor(GAME_HEIGHT / TILE_SIZE) - 4;  // 18
+
+    this.centerX = (cols * TILE_SIZE) / 2;
+    this.centerY = (mapRows * TILE_SIZE) / 2;
+
+    // 直线段在水平方向，半圆在左右两端
+    // 半圆半径 = 地图高度的 ~35%
+    this.radiusY = mapRows * TILE_SIZE * 0.32;
+    // 直线段半长 = 地图宽度的 ~30%（两端留空给半圆）
+    this.straightLen = cols * TILE_SIZE * 0.28;
+
     this.generateTrack();
     this.calculateBuildableTiles();
   }
 
-  /**
-   * 生成一条方形环跑道
-   * 跑道中心线形成一个矩形环路
-   * 怪物沿着中心线上的 waypoint 顺时针跑
-   */
   private generateTrack(): void {
-    const cols = Math.floor(GAME_WIDTH / TILE_SIZE);        // 40
-    const mapRows = Math.floor(GAME_HEIGHT / TILE_SIZE) - 4; // 18 (去掉底部UI约4行)
+    const hw = this.trackWidth; // 跑道宽度（格数）
+    const hwPx = hw * TILE_SIZE / 2; // 跑道半宽（像素）
+    const arcSegments = 24; // 半圆弧分段数
 
-    const margin = this.trackMargin;
-    const hw = Math.floor(this.trackWidth / 2);
+    // === 标记路径瓦片 ===
+    // 沿跑道中心线采样，将周围 hwPx 范围内的格子标记为路径
+    const samplePoints: Vec2[] = [];
 
-    // 跑道中心线的四个角坐标（格子坐标）
-    const left = margin;
-    const right = cols - margin - 1;
-    const top = margin;
-    const bottom = mapRows - margin - 1;
+    // 上直线：从左弧端 → 右弧端（y = centerY - radiusY 位置是错的，应该是直线段）
+    // 修正：操场跑道是水平直线+左右半圆
+    // 上直线 y = centerY - radiusY... 不对
+    // 
+    // 操场跑道正确结构：
+    // - 上直线: 从 (cx - straightLen, cy - radiusY) 到 (cx + straightLen, cy - radiusY)  ← 不对
+    //
+    // 其实操场跑道结构是：
+    // - 上直线: y = cy - 某个值, x 从左到右
+    // - 下直线: y = cy + 某个值, x 从右到左
+    // - 右半圆: 圆心在 (cx + straightLen, cy), 半径 radiusY
+    // - 左半圆: 圆心在 (cx - straightLen, cy), 半径 radiusY
+    //
+    // 所以：
+    // 上边直线: y 恒定 = cy - radiusY, x 从 cx-straightLen 到 cx+straightLen
+    // 这不对...操场跑道应该是：
+    //
+    // 左半圆中心: (cx - straightLen, cy)
+    // 右半圆中心: (cx + straightLen, cy)
+    // 上直线: 从左半圆顶点到右半圆顶点 → y = cy - radiusY
+    // 下直线: 从右半圆底点到左半圆底点 → y = cy + radiusY
 
-    // 标记跑道瓦片（2格宽的方形环）
-    // 上边横条 (不含角落，角落由竖条处理)
-    for (let col = left; col <= right; col++) {
-      for (let w = -hw; w < hw; w++) {
-        this.pathTiles.add(`${col},${top + w}`);
-      }
-    }
-    // 下边横条
-    for (let col = left; col <= right; col++) {
-      for (let w = -hw; w < hw; w++) {
-        this.pathTiles.add(`${col},${bottom + w}`);
-      }
-    }
-    // 左边竖条 (包含角落)
-    for (let row = top - hw; row <= bottom + hw - 1; row++) {
-      for (let w = -hw; w < hw; w++) {
-        this.pathTiles.add(`${left + w},${row}`);
-      }
-    }
-    // 右边竖条 (包含角落)
-    for (let row = top - hw; row <= bottom + hw - 1; row++) {
-      for (let w = -hw; w < hw; w++) {
-        this.pathTiles.add(`${right + w},${row}`);
-      }
+    const leftArcCx = this.centerX - this.straightLen;
+    const rightArcCx = this.centerX + this.straightLen;
+
+    // 顺时针方向采样跑道中心线：
+    // 1. 上直线（左→右）
+    const numStraightPts = 40;
+    for (let i = 0; i <= numStraightPts; i++) {
+      const t = i / numStraightPts;
+      samplePoints.push({
+        x: leftArcCx + t * (this.straightLen * 2),
+        y: this.centerY - this.radiusY,
+      });
     }
 
-    // 四角填充（让转弯处不留缝隙）
-    for (const [cx, cy] of [[left, top], [right, top], [left, bottom], [right, bottom]]) {
-      for (let dc = -hw; dc < hw; dc++) {
-        for (let dr = -hw; dr < hw; dr++) {
-          this.pathTiles.add(`${cx + dc},${cy + dr}`);
+    // 2. 右半圆（上→下，顺时针 = -PI/2 → +PI/2）
+    for (let i = 1; i <= arcSegments; i++) {
+      const angle = -Math.PI / 2 + (i / arcSegments) * Math.PI;
+      samplePoints.push({
+        x: rightArcCx + Math.cos(angle) * this.radiusY * 0.5,  // 椭圆x方向压缩
+        y: this.centerY + Math.sin(angle) * this.radiusY,
+      });
+    }
+
+    // 3. 下直线（右→左）
+    for (let i = 1; i <= numStraightPts; i++) {
+      const t = i / numStraightPts;
+      samplePoints.push({
+        x: rightArcCx - t * (this.straightLen * 2),
+        y: this.centerY + this.radiusY,
+      });
+    }
+
+    // 4. 左半圆（下→上，顺时针 = +PI/2 → +3PI/2 即 PI/2 → -PI/2）
+    for (let i = 1; i < arcSegments; i++) {
+      const angle = Math.PI / 2 + (i / arcSegments) * Math.PI;
+      samplePoints.push({
+        x: leftArcCx + Math.cos(angle) * this.radiusY * 0.5,
+        y: this.centerY + Math.sin(angle) * this.radiusY,
+      });
+    }
+
+    // waypoints = 采样点
+    this.waypoints = samplePoints;
+
+    // 出怪口 = 左侧中点
+    this.spawnPoint = { x: leftArcCx - this.radiusY * 0.5, y: this.centerY };
+
+    // 标记路径瓦片：对每个采样点，将其周围 hwPx 范围内的格子标记
+    for (const pt of samplePoints) {
+      const centerCol = Math.floor(pt.x / TILE_SIZE);
+      const centerRow = Math.floor(pt.y / TILE_SIZE);
+      for (let dc = -hw; dc <= hw; dc++) {
+        for (let dr = -hw; dr <= hw; dr++) {
+          const c = centerCol + dc;
+          const r = centerRow + dr;
+          // 检查格子中心是否在跑道宽度范围内
+          const gx = c * TILE_SIZE + TILE_SIZE / 2;
+          const gy = r * TILE_SIZE + TILE_SIZE / 2;
+          const dist = Math.sqrt((gx - pt.x) ** 2 + (gy - pt.y) ** 2);
+          if (dist <= hwPx + TILE_SIZE * 0.3) {
+            this.pathTiles.add(`${c},${r}`);
+          }
         }
       }
     }
-
-    // 生成中心线 waypoints（怪物沿此路径跑）
-    // 顺时针: 从出怪口（左上角）开始 → 右 → 下 → 左 → 上 → 回到起点
-    // 出怪口在左上角
-    const spawnCol = left;
-    const spawnRow = top;
-    this.spawnPoint = {
-      x: spawnCol * TILE_SIZE + TILE_SIZE / 2,
-      y: spawnRow * TILE_SIZE + TILE_SIZE / 2,
-    };
-
-    // 上边: 左→右
-    for (let col = left; col <= right; col++) {
-      this.waypoints.push({
-        x: col * TILE_SIZE + TILE_SIZE / 2,
-        y: top * TILE_SIZE + TILE_SIZE / 2,
-      });
-    }
-    // 右边: 上→下
-    for (let row = top + 1; row <= bottom; row++) {
-      this.waypoints.push({
-        x: right * TILE_SIZE + TILE_SIZE / 2,
-        y: row * TILE_SIZE + TILE_SIZE / 2,
-      });
-    }
-    // 下边: 右→左
-    for (let col = right - 1; col >= left; col--) {
-      this.waypoints.push({
-        x: col * TILE_SIZE + TILE_SIZE / 2,
-        y: bottom * TILE_SIZE + TILE_SIZE / 2,
-      });
-    }
-    // 左边: 下→上（不包含起始点，因为循环回起始点）
-    for (let row = bottom - 1; row > top; row--) {
-      this.waypoints.push({
-        x: left * TILE_SIZE + TILE_SIZE / 2,
-        y: row * TILE_SIZE + TILE_SIZE / 2,
-      });
-    }
   }
 
-  /**
-   * 计算可建造区域
-   * 跑道外侧 = 外圈建造区
-   * 跑道内侧 = 内圈建造区
-   * 跑道本身不可建造
-   */
   private calculateBuildableTiles(): void {
     const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
     const mapRows = Math.floor(GAME_HEIGHT / TILE_SIZE) - 4;
@@ -150,7 +152,6 @@ export class PathManager {
     for (let col = 0; col < cols; col++) {
       for (let row = 0; row < mapRows; row++) {
         if (!this.pathTiles.has(`${col},${row}`)) {
-          // 不在跑道上 + 在地图边界内
           if (col >= 1 && col < cols - 1 && row >= 1 && row < mapRows) {
             this.buildableTiles.add(`${col},${row}`);
           }
@@ -161,26 +162,16 @@ export class PathManager {
 
   // ======= 公开接口 =======
 
-  /** 获取环形跑道的中心线 waypoints（怪物沿此循环跑） */
   getWaypoints(): Vec2[] { return this.waypoints; }
-
-  /** 获取出怪口位置 */
   getSpawnPoint(): Vec2 { return { ...this.spawnPoint }; }
-
-  /** 怪物生成时的路径（单跑道，所有怪物走同一条路） */
   getSpawnWaypoints(): Vec2[] { return this.waypoints; }
-
-  /** 内圈（兼容旧接口，单跑道版本无内圈，返回同一路径） */
   getInnerWaypoints(): Vec2[] { return this.waypoints; }
   hasInnerRing(): boolean { return false; }
   getInnerSpawnPoint(): Vec2 { return this.getSpawnPoint(); }
-
-  /** 路径瓦片检测 */
   isPathTile(col: number, row: number): boolean { return this.pathTiles.has(`${col},${row}`); }
   isBuildable(col: number, row: number): boolean { return this.buildableTiles.has(`${col},${row}`); }
   getPathTiles(): Set<string> { return this.pathTiles; }
 
-  /** 获取下一个 waypoint（用于预瞄等逻辑） */
   getNextWaypoint(currentIndex: number): { point: Vec2; index: number } {
     const nextIndex = (currentIndex + 1) % this.waypoints.length;
     return { point: this.waypoints[nextIndex], index: nextIndex };

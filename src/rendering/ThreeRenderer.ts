@@ -37,7 +37,7 @@ export class ThreeRenderer {
     this.scene = new THREE.Scene();
     // 天空渐变色（顶部蓝 → 底部浅蓝白）
     this.scene.background = new THREE.Color(0x7EC8E3);
-    this.scene.fog = new THREE.Fog(0xBBDDCC, 30, 80); // 线性雾：远处渐隐
+    this.scene.fog = new THREE.Fog(0xCCEEDD, 60, 150); // 线性雾：很远处才渐隐
 
     const renderW = GAME_WIDTH;
     const renderH = GAME_HEIGHT;

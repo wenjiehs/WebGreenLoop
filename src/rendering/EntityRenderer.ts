@@ -39,6 +39,7 @@ export class EntityRenderer {
   private terrainBuilt = false;
   private terrainGroup: THREE.Group | null = null;
   private spawnPillar: THREE.Mesh | null = null;
+  private spawnExtras: THREE.Object3D[] = [];
 
   constructor(renderer: ThreeRenderer) {
     this.renderer = renderer;
@@ -55,16 +56,48 @@ export class EntityRenderer {
     this.renderer.scene.add(terrain);
     this.terrainGroup = terrain;
 
-    // 出生点标记
+    // 出生点标记 — 更大更醒目
     const spawn = pathManager.getSpawnPoint();
     const pos = ThreeRenderer.toWorld(spawn.x, spawn.y, 0);
+
+    // 红色光柱
     const pillar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.04, 1.2, 8),
-      new THREE.MeshBasicMaterial({ color: 0xFF4444, transparent: true, opacity: 0.25 }),
+      new THREE.CylinderGeometry(0.15, 0.15, 2.0, 8),
+      new THREE.MeshBasicMaterial({ color: 0xFF3333, transparent: true, opacity: 0.35 }),
     );
-    pillar.position.set(pos.x, 0.6, pos.z);
+    pillar.position.set(pos.x, 1.0, pos.z);
     this.renderer.scene.add(pillar);
     this.spawnPillar = pillar;
+
+    // 底部红色光环
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.5, 0.04, 6, 24),
+      new THREE.MeshBasicMaterial({ color: 0xFF4444, transparent: true, opacity: 0.5 }),
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(pos.x, 0.05, pos.z);
+    this.renderer.scene.add(ring);
+
+    // 顶部红色菱形标记
+    const diamond = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.2, 0),
+      new THREE.MeshBasicMaterial({ color: 0xFF2222, transparent: true, opacity: 0.6 }),
+    );
+    diamond.position.set(pos.x, 2.2, pos.z);
+    diamond.name = 'spawnDiamond';
+    this.renderer.scene.add(diamond);
+    this.spawnExtras = [ring, diamond];
+
+    // 浮动动画
+    const animateSpawn = () => {
+      const t = performance.now() * 0.002;
+      diamond.position.y = 2.2 + Math.sin(t) * 0.15;
+      diamond.rotation.y = t * 0.5;
+      ring.scale.setScalar(1 + Math.sin(t * 1.5) * 0.1);
+      (ring.material as THREE.MeshBasicMaterial).opacity = 0.3 + Math.sin(t * 2) * 0.15;
+      requestAnimationFrame(animateSpawn);
+    };
+    requestAnimationFrame(animateSpawn);
   }
 
   sync(towers: TowerLogic[], enemies: EnemyLogic[], heroTower: HeroTowerLogic | null, time: number): void {
@@ -395,6 +428,8 @@ export class EntityRenderer {
     // MISS-005: 移除旧地形
     if (this.terrainGroup) { this.renderer.scene.remove(this.terrainGroup); this.terrainGroup = null; }
     if (this.spawnPillar) { this.renderer.scene.remove(this.spawnPillar); this.spawnPillar = null; }
+    this.spawnExtras.forEach(o => this.renderer.scene.remove(o));
+    this.spawnExtras = [];
     this.terrainBuilt = false;
   }
 

@@ -25,6 +25,7 @@ export class TowerLogic {
   killCount: number = 0;
   heroLevel: number = 1;
   isSelected: boolean = false;
+  justFired: boolean = false; // C3: 攻击动画触发标记
 
   // 光环 buff
   auraDamageBonus: number = 0;
@@ -148,6 +149,7 @@ export class TowerLogic {
   }
 
   private fireAt(target: EnemyLogic): void {
+    this.justFired = true; // C3: 触发攻击动画
     // 侦查塔
     if (this.config.special === 'detect') {
       for (const e of this.enemies) {

@@ -29,7 +29,7 @@ export class ThreeRenderer {
   private cameraTarget = new THREE.Vector3(0, 0, 0);
   private cameraZoom = 1;
   private targetZoom = 1;
-  private baseFrustum = WORLD_W * 1.15; // 比地图宽一点留边距
+  private baseFrustum = WORLD_W * 1.05; // 紧凑视角，地图占满更多画面
 
   // 时间
   private clock = new THREE.Clock();
@@ -38,20 +38,20 @@ export class ThreeRenderer {
   constructor(container: HTMLElement) {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1a2a0e);
-    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.003);
+    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.0025);
 
     const renderW = GAME_WIDTH;
     const renderH = GAME_HEIGHT;
     const aspect = renderW / renderH;
 
-    // Camera — frustum 基于世界实际大小
+    // Camera — frustum 紧凑贴合地图
     this.camera = new THREE.OrthographicCamera(
       -this.baseFrustum * aspect / 2, this.baseFrustum * aspect / 2,
       this.baseFrustum / 2, -this.baseFrustum / 2,
       0.1, 500,
     );
-    // 正 45° 俯视 — 位置够远以覆盖全图
-    this.camera.position.set(40, 60, 40);
+    // 约 55° 俯视 — 更陡一点，看到更多地面
+    this.camera.position.set(25, 55, 35);
     this.camera.lookAt(0, 0, 0);
 
     // Renderer
@@ -133,11 +133,12 @@ export class ThreeRenderer {
     this.camera.top = frustum / 2;
     this.camera.bottom = -frustum / 2;
 
-    const d = 60 / this.cameraZoom;
+    // 约 55° 俯视角（更陡 = 看到更多地面）
+    const d = 55 / this.cameraZoom;
     this.camera.position.set(
-      this.cameraTarget.x + d * 0.5,
+      this.cameraTarget.x + d * 0.35,
       d,
-      this.cameraTarget.z + d * 0.5,
+      this.cameraTarget.z + d * 0.55,
     );
     this.camera.lookAt(this.cameraTarget);
     this.camera.updateProjectionMatrix();

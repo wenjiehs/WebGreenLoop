@@ -10,7 +10,7 @@ import { HeroTowerLogic } from '../entities/HeroTowerLogic';
 import { PathManager } from '../systems/PathManager';
 import { TILE_SIZE } from '../utils/constants';
 
-interface TowerSync { tower: TowerLogic; model: THREE.Group; lastLevel: number; }
+interface TowerSync { tower: TowerLogic; model: THREE.Group; lastLevel: number; attackAnim: number; }
 interface EnemySync { enemy: EnemyLogic; model: THREE.Group; walkPhase: number; lastX: number; lastZ: number; }
 
 /**
@@ -78,7 +78,7 @@ export class EntityRenderer {
         const pos = ThreeRenderer.toWorld(tower.x, tower.y, 0);
         model.position.set(pos.x, -0.5, pos.z);
         this.towerGroup.add(model);
-        this.towerSyncs.set(tower, { tower, model, lastLevel: tower.level });
+        this.towerSyncs.set(tower, { tower, model, lastLevel: tower.level, attackAnim: 0 });
         this.animateRise(model, 0, 20);
       }
     }
@@ -96,6 +96,22 @@ export class EntityRenderer {
         this.towerGroup.add(newModel);
         sync.model = newModel;
         sync.lastLevel = tower.level;
+      }
+      // C3: 塔攻击弹跳动画
+      if (tower.justFired) {
+        sync.attackAnim = 1.0;
+        tower.justFired = false;
+      }
+      if (sync.attackAnim > 0) {
+        sync.attackAnim -= 0.08;
+        if (sync.attackAnim < 0) sync.attackAnim = 0;
+        const bounce = Math.sin(sync.attackAnim * Math.PI) * 0.08;
+        const squeeze = 1 + Math.sin(sync.attackAnim * Math.PI) * 0.06;
+        sync.model.position.y = bounce;
+        sync.model.scale.set(squeeze, 1 / squeeze, squeeze); // 横向拉伸纵向压缩
+      } else {
+        sync.model.position.y = 0;
+        sync.model.scale.set(1, 1, 1);
       }
     }
   }
@@ -366,5 +382,99 @@ export class EntityRenderer {
     this.clearSelection(); this.clearBuildPreview();
     [this.towerGroup, this.enemyGroup, this.effectGroup].forEach(g => { while (g.children.length) g.remove(g.children[0]); });
     this.terrainBuilt = false;
+  }
+
+  // ===== C2: 3D 波次横幅 =====
+  showWaveBanner(text: string, color: string = '#44FF44'): void {
+    // 用 Canvas 纹理创建 Billboard 文字
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+
+    // 背景（半透明黑色圆角矩形）
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    this.roundRect(ctx, 10, 10, 492, 108, 16);
+    ctx.fill();
+
+    // 边框
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    this.roundRect(ctx, 10, 10, 492, 108, 16);
+    ctx.stroke();
+
+    // 文字
+    ctx.fillStyle = color;
+    ctx.font = 'bold 52px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 256, 64);
+
+    // 文字阴影效果
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = 'bold 52px Arial, sans-serif';
+    ctx.fillText(text, 256, 62);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(8, 2, 1);
+    sprite.position.set(0, 5, 0); // 场景中央上方
+    this.renderer.scene.add(sprite);
+
+    // 动画：淡入 → 停留 → 上浮淡出
+    let frame = 0;
+    const totalFrames = 120; // 约2秒
+    const anim = () => {
+      frame++;
+      const t = frame / totalFrames;
+
+      if (t < 0.15) {
+        // 淡入 + 从下方弹上
+        const easeIn = t / 0.15;
+        material.opacity = easeIn;
+        sprite.position.y = 3 + easeIn * 2;
+        sprite.scale.set(8 * (0.8 + easeIn * 0.2), 2 * (0.8 + easeIn * 0.2), 1);
+      } else if (t < 0.7) {
+        // 停留 + 轻微浮动
+        material.opacity = 1;
+        sprite.position.y = 5 + Math.sin((t - 0.15) * 10) * 0.15;
+      } else {
+        // 上浮淡出
+        const fadeOut = (t - 0.7) / 0.3;
+        material.opacity = 1 - fadeOut;
+        sprite.position.y = 5 + fadeOut * 2;
+      }
+
+      if (frame >= totalFrames) {
+        this.renderer.scene.remove(sprite);
+        material.dispose();
+        texture.dispose();
+      } else {
+        requestAnimationFrame(anim);
+      }
+    };
+    requestAnimationFrame(anim);
+  }
+
+  private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 }

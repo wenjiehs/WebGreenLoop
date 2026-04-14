@@ -133,18 +133,28 @@ src/
 
 ## 🟢 C 类 — 3D 视觉增强
 
-### C1. 3D 地形可能需要调参
-- [ ] 确认 frustum / 摄像机角度 / 地形大小是否匹配
-- [ ] 确认 Raycaster 点击坐标转换是否准确
-- 涉及: `ThreeRenderer.ts`, `EntityRenderer.ts`
+### C1. 3D 摄像机/地形调参 ✅
+- [x] frustum 收紧至 WORLD_W × 1.05（地图占满更多画面）
+- [x] 摄像机角度调整为 ~55° 俯视（更陡，看到更多地面）
+- [x] 雾效浓度微调 0.003→0.0025（远处可见性更好）
+- [x] Raycaster 拾取无需改动（坐标转换正确）
+- 涉及: `ThreeRenderer.ts`
 
-### C2. 3D 波次横幅
-- [ ] 3D 场景中显示 "WAVE X" 文字（Billboard Text）
-- 涉及: `EntityRenderer.ts`
+### C2. 3D 波次横幅 ✅
+- [x] Canvas 纹理 Sprite Billboard 文字
+- [x] 淡入弹上 → 停留浮动 → 上浮淡出（~2秒）
+- [x] 普通波: 绿色 "WAVE X"
+- [x] Boss 波: 红色 "⚠️ WAVE X — BOSS"
+- [x] 隐藏关: 金色 "🌟 HIDDEN X"
+- [x] 无尽模式: 紫色 "♾️ ENDLESS #X"
+- 涉及: `EntityRenderer.ts` showWaveBanner, `Game.ts` onWaveStart
 
-### C3. 塔攻击动画
-- [ ] 3D 塔攻击时有旋转/缩放动画
-- 涉及: `EntityRenderer.ts` syncTowers
+### C3. 塔攻击动画 ✅
+- [x] TowerLogic.justFired 标记（fireAt 时设 true）
+- [x] EntityRenderer.syncTowers 检测 justFired → 触发弹跳动画
+- [x] 动画: 正弦弹跳上升(0.08) + 横向拉伸纵向压缩(6%)
+- [x] 约 12 帧衰减回原位
+- 涉及: `TowerLogic.ts`, `EntityRenderer.ts`
 
 ---
 

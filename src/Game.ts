@@ -765,8 +765,23 @@ export class Game {
   private onWaveStart(waveNum: number, config: WaveConfig): void {
     this.economyManager.setCurrentWave(waveNum);
     const mode = this.waveManager.getGameMode();
-    if (config.isBossWave) { this.showMessage(`⚠️ 第 ${waveNum} 波 - BOSS 来袭！`); soundManager.playBossAlert(); soundManager.startBossBGM(); }
-    else { this.showMessage(`第 ${waveNum} 波开始`); soundManager.playWaveStart(); soundManager.startGameBGM(); }
+    if (config.isBossWave) {
+      this.showMessage(`⚠️ 第 ${waveNum} 波 - BOSS 来袭！`);
+      soundManager.playBossAlert(); soundManager.startBossBGM();
+      this.entityRenderer.showWaveBanner(`⚠️ WAVE ${waveNum} — BOSS`, '#FF4444');
+    } else if (mode === 'hidden') {
+      this.showMessage(`🌟 隐藏关 第 ${waveNum - 50} 波`);
+      soundManager.playWaveStart(); soundManager.startGameBGM();
+      this.entityRenderer.showWaveBanner(`🌟 HIDDEN ${waveNum - 50}`, '#FFD700');
+    } else if (mode === 'endless') {
+      this.showMessage(`♾️ 无尽 #${waveNum - 60}`);
+      soundManager.playWaveStart(); soundManager.startGameBGM();
+      this.entityRenderer.showWaveBanner(`♾️ ENDLESS #${waveNum - 60}`, '#AA88FF');
+    } else {
+      this.showMessage(`第 ${waveNum} 波开始`);
+      soundManager.playWaveStart(); soundManager.startGameBGM();
+      this.entityRenderer.showWaveBanner(`WAVE ${waveNum}`, '#44FF44');
+    }
   }
 
   private onVictory(): void {

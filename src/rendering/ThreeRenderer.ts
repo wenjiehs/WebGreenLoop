@@ -37,8 +37,8 @@ export class ThreeRenderer {
 
   constructor(container: HTMLElement) {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1a2a0e);
-    this.scene.fog = new THREE.FogExp2(0x1a2a0e, 0.0025);
+    this.scene.background = new THREE.Color(0x87CEEB); // 天空蓝
+    this.scene.fog = new THREE.FogExp2(0x88BBAA, 0.0015); // 淡绿雾，很远处才明显
 
     const renderW = GAME_WIDTH;
     const renderH = GAME_HEIGHT;
@@ -61,7 +61,7 @@ export class ThreeRenderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.5;
     container.appendChild(this.renderer.domElement);
 
     // 后处理 — 只用 Bloom，跳过 FXAA（兼容性问题）
@@ -76,8 +76,8 @@ export class ThreeRenderer {
   }
 
   private setupLights(): void {
-    // 太阳光 — 位置要覆盖整个世界
-    const sun = new THREE.DirectionalLight(0xFFEECC, 2.0);
+    // 明亮太阳光 — 温暖的午后阳光
+    const sun = new THREE.DirectionalLight(0xFFF5E0, 2.5);
     sun.position.set(30, 50, 20);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -88,11 +88,13 @@ export class ThreeRenderer {
     sun.shadow.bias = -0.0003;
     this.scene.add(sun);
 
-    this.scene.add(new THREE.AmbientLight(0x556677, 0.6));
-    this.scene.add(new THREE.HemisphereLight(0x88BBEE, 0x445522, 0.4));
+    // 更亮的环境光
+    this.scene.add(new THREE.AmbientLight(0x8899AA, 0.8));
+    // 天空蓝 + 地面绿 半球光
+    this.scene.add(new THREE.HemisphereLight(0x99CCFF, 0x558833, 0.6));
 
     // 补光
-    const fill = new THREE.DirectionalLight(0x8888CC, 0.2);
+    const fill = new THREE.DirectionalLight(0xAABBDD, 0.3);
     fill.position.set(-20, 30, -15);
     this.scene.add(fill);
   }

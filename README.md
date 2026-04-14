@@ -111,10 +111,11 @@ npm run dev
 
 ## 🛠️ 技术栈
 
-- **Phaser 3** — 2D 游戏引擎
+- **Three.js** — 3D 渲染引擎（纯 Three.js，无 Phaser）
 - **TypeScript** — 类型安全
 - **Vite** — 快速构建
 - **Web Audio API** — 合成音效（零外部资源依赖）
+- **HTML/CSS** — UI 层（商店/信息面板/顶栏/结算）
 
 ## 📁 项目结构
 

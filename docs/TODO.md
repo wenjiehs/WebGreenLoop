@@ -93,11 +93,12 @@ src/
 
 ## 🟡 B 类 — 功能完善
 
-### B1. 双环跑道 ✅
-- [x] 外圈(margin=3) + 内圈(margin=8) 双方形跑道
-- [x] 怪物交替在内外圈生成(getSpawnWaypoints)
-- [x] EnemyLogic 支持指定路径点列表
-- 涉及: `PathManager.ts`, `EnemyLogic.ts`, `Game.ts`
+### B1. 正确的绿色循环圈地图 ✅
+- [x] 一条2格宽方形环跑道（margin=5）
+- [x] 出怪口在左上角，怪物顺时针无限循环跑圈
+- [x] 跑道外侧（外圈）和内侧（内圈）都可建塔
+- [x] 符合原版"一条跑道+两侧建塔"的经典设计
+- 涉及: `PathManager.ts`
 
 ### B2. 破坏塔/魔幻塔英雄成长 ✅
 - [x] hero_grow 伤害成长: +8%/英雄等级

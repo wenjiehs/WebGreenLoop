@@ -3,112 +3,177 @@ import { TILE_SIZE, GAME_WIDTH, GAME_HEIGHT } from '../utils/constants';
 export interface Vec2 { x: number; y: number; }
 
 /**
- * 路径管理器 — 支持内外双环跑道
- * 外圈：margin=3 的方形环
- * 内圈：margin=7 的方形环（更小）
- * 怪物交替在两条跑道上生成
+ * 绿色循环圈 路径管理器
+ *
+ * 原版地图结构：
+ * - 一条闭合的方形环跑道（2格宽），怪物在上面无限循环跑圈
+ * - 跑道中心线大约在距地图边缘 6-7 格的位置
+ * - 出怪口在跑道左上角附近
+ * - 玩家在跑道**外侧**（外圈）和**内侧**（内圈）两侧建造防御塔
+ * - 怪物从出怪口出生后，沿跑道顺时针跑圈，永远不会自行消失
+ *
+ * 地图示意（40×18格，去掉底部UI区）：
+ *
+ *   ┌─────────────────────────────────────┐
+ *   │  外圈建造区                           │
+ *   │    ┌───────────────────────────┐     │
+ *   │    │  ★出怪口                   │     │
+ *   │    │  ═══════════════════════►  │     │
+ *   │    │  ║                      ║  │     │
+ *   │    │  ║    内圈建造区          ║  │     │
+ *   │    │  ║                      ║  │     │
+ *   │    │  ◄═══════════════════════  │     │
+ *   │    └───────────────────────────┘     │
+ *   │  外圈建造区                           │
+ *   └─────────────────────────────────────┘
+ *
+ * 跑道宽度 = 2格，中心线走的是这 2 格的中间
  */
 export class PathManager {
-  private outerWaypoints: Vec2[] = [];
-  private innerWaypoints: Vec2[] = [];
+  private waypoints: Vec2[] = [];
   private pathTiles: Set<string> = new Set();
   private buildableTiles: Set<string> = new Set();
-  private useInner: boolean = false; // 交替生成标记
+  private spawnPoint: Vec2 = { x: 0, y: 0 };
+
+  // 跑道参数
+  private readonly trackMargin = 5;  // 跑道中心线距地图边缘的格数
+  private readonly trackWidth = 2;   // 跑道宽度（格数）
 
   constructor() {
-    this.generateDualPath();
+    this.generateTrack();
     this.calculateBuildableTiles();
   }
 
-  private generateDualPath(): void {
-    const pathWidth = 2;
+  /**
+   * 生成一条方形环跑道
+   * 跑道中心线形成一个矩形环路
+   * 怪物沿着中心线上的 waypoint 顺时针跑
+   */
+  private generateTrack(): void {
+    const cols = Math.floor(GAME_WIDTH / TILE_SIZE);        // 40
+    const mapRows = Math.floor(GAME_HEIGHT / TILE_SIZE) - 4; // 18 (去掉底部UI约4行)
 
-    // 外圈
-    const oLeft = 3, oRight = Math.floor(GAME_WIDTH / TILE_SIZE) - 4;
-    const oTop = 3, oBottom = Math.floor(GAME_HEIGHT / TILE_SIZE) - 4;
-    this.outerWaypoints = this.generateRingWaypoints(oLeft, oRight, oTop, oBottom);
-    this.markPathTiles(oLeft, oRight, oTop, oBottom, pathWidth);
+    const margin = this.trackMargin;
+    const hw = Math.floor(this.trackWidth / 2);
 
-    // 内圈（更小的方形环）
-    const iLeft = 8, iRight = Math.floor(GAME_WIDTH / TILE_SIZE) - 9;
-    const iTop = 7, iBottom = Math.floor(GAME_HEIGHT / TILE_SIZE) - 8;
-    // 只有内圈足够大时才生成
-    if (iRight > iLeft + 4 && iBottom > iTop + 2) {
-      this.innerWaypoints = this.generateRingWaypoints(iLeft, iRight, iTop, iBottom);
-      this.markPathTiles(iLeft, iRight, iTop, iBottom, pathWidth);
+    // 跑道中心线的四个角坐标（格子坐标）
+    const left = margin;
+    const right = cols - margin - 1;
+    const top = margin;
+    const bottom = mapRows - margin - 1;
+
+    // 标记跑道瓦片（2格宽的方形环）
+    // 上边 (从 left 到 right, 行 = top-hw 到 top+hw-1)
+    for (let col = left - hw; col <= right + hw; col++) {
+      for (let w = -hw; w < hw; w++) {
+        this.pathTiles.add(`${col},${top + w}`);
+      }
     }
-  }
+    // 下边
+    for (let col = left - hw; col <= right + hw; col++) {
+      for (let w = -hw; w < hw; w++) {
+        this.pathTiles.add(`${col},${bottom + w}`);
+      }
+    }
+    // 左边
+    for (let row = top - hw; row <= bottom + hw; row++) {
+      for (let w = -hw; w < hw; w++) {
+        this.pathTiles.add(`${left + w},${row}`);
+      }
+    }
+    // 右边
+    for (let row = top - hw; row <= bottom + hw; row++) {
+      for (let w = -hw; w < hw; w++) {
+        this.pathTiles.add(`${right + w},${row}`);
+      }
+    }
 
-  private generateRingWaypoints(left: number, right: number, top: number, bottom: number): Vec2[] {
-    const wp: Vec2[] = [];
+    // 生成中心线 waypoints（怪物沿此路径跑）
+    // 顺时针: 从出怪口（左上角）开始 → 右 → 下 → 左 → 上 → 回到起点
+    // 出怪口在左上角
+    const spawnCol = left;
+    const spawnRow = top;
+    this.spawnPoint = {
+      x: spawnCol * TILE_SIZE + TILE_SIZE / 2,
+      y: spawnRow * TILE_SIZE + TILE_SIZE / 2,
+    };
+
     // 上边: 左→右
-    for (let col = left; col <= right; col++)
-      wp.push({ x: col * TILE_SIZE + TILE_SIZE / 2, y: top * TILE_SIZE + TILE_SIZE / 2 });
+    for (let col = left; col <= right; col++) {
+      this.waypoints.push({
+        x: col * TILE_SIZE + TILE_SIZE / 2,
+        y: top * TILE_SIZE + TILE_SIZE / 2,
+      });
+    }
     // 右边: 上→下
-    for (let row = top + 1; row <= bottom; row++)
-      wp.push({ x: right * TILE_SIZE + TILE_SIZE / 2, y: row * TILE_SIZE + TILE_SIZE / 2 });
+    for (let row = top + 1; row <= bottom; row++) {
+      this.waypoints.push({
+        x: right * TILE_SIZE + TILE_SIZE / 2,
+        y: row * TILE_SIZE + TILE_SIZE / 2,
+      });
+    }
     // 下边: 右→左
-    for (let col = right - 1; col >= left; col--)
-      wp.push({ x: col * TILE_SIZE + TILE_SIZE / 2, y: bottom * TILE_SIZE + TILE_SIZE / 2 });
-    // 左边: 下→上
-    for (let row = bottom - 1; row > top; row--)
-      wp.push({ x: left * TILE_SIZE + TILE_SIZE / 2, y: row * TILE_SIZE + TILE_SIZE / 2 });
-    return wp;
-  }
-
-  private markPathTiles(left: number, right: number, top: number, bottom: number, pathWidth: number): void {
-    for (let pw = 0; pw < pathWidth; pw++) {
-      for (let col = left - 1; col <= right + 1; col++) {
-        this.pathTiles.add(`${col},${top - 1 + pw}`);
-        this.pathTiles.add(`${col},${top + pw}`);
-      }
-      for (let col = left - 1; col <= right + 1; col++) {
-        this.pathTiles.add(`${col},${bottom + 1 - pw}`);
-        this.pathTiles.add(`${col},${bottom - pw}`);
-      }
-      for (let row = top - 1; row <= bottom + 1; row++) {
-        this.pathTiles.add(`${left - 1 + pw},${row}`);
-        this.pathTiles.add(`${left + pw},${row}`);
-      }
-      for (let row = top - 1; row <= bottom + 1; row++) {
-        this.pathTiles.add(`${right + 1 - pw},${row}`);
-        this.pathTiles.add(`${right - pw},${row}`);
-      }
+    for (let col = right - 1; col >= left; col--) {
+      this.waypoints.push({
+        x: col * TILE_SIZE + TILE_SIZE / 2,
+        y: bottom * TILE_SIZE + TILE_SIZE / 2,
+      });
+    }
+    // 左边: 下→上（不包含起始点，因为循环回起始点）
+    for (let row = bottom - 1; row > top; row--) {
+      this.waypoints.push({
+        x: left * TILE_SIZE + TILE_SIZE / 2,
+        y: row * TILE_SIZE + TILE_SIZE / 2,
+      });
     }
   }
 
+  /**
+   * 计算可建造区域
+   * 跑道外侧 = 外圈建造区
+   * 跑道内侧 = 内圈建造区
+   * 跑道本身不可建造
+   */
   private calculateBuildableTiles(): void {
     const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
-    const rows = Math.floor(GAME_HEIGHT / TILE_SIZE);
+    const mapRows = Math.floor(GAME_HEIGHT / TILE_SIZE) - 4;
+
     for (let col = 0; col < cols; col++) {
-      for (let row = 0; row < rows; row++) {
-        if (!this.pathTiles.has(`${col},${row}`) && row < rows - 3) {
-          this.buildableTiles.add(`${col},${row}`);
+      for (let row = 0; row < mapRows; row++) {
+        if (!this.pathTiles.has(`${col},${row}`)) {
+          // 不在跑道上 + 在地图边界内
+          if (col >= 1 && col < cols - 1 && row >= 1 && row < mapRows) {
+            this.buildableTiles.add(`${col},${row}`);
+          }
         }
       }
     }
   }
 
-  /** 获取当前应使用的路径点（外圈或内圈交替） */
-  getWaypoints(): Vec2[] { return this.outerWaypoints; }
-  getInnerWaypoints(): Vec2[] { return this.innerWaypoints; }
-  hasInnerRing(): boolean { return this.innerWaypoints.length > 0; }
+  // ======= 公开接口 =======
 
-  /** 交替获取生成路径（外圈/内圈） */
-  getSpawnWaypoints(): Vec2[] {
-    if (!this.hasInnerRing()) return this.outerWaypoints;
-    this.useInner = !this.useInner;
-    return this.useInner ? this.innerWaypoints : this.outerWaypoints;
-  }
+  /** 获取环形跑道的中心线 waypoints（怪物沿此循环跑） */
+  getWaypoints(): Vec2[] { return this.waypoints; }
 
-  getSpawnPoint(): Vec2 { return { ...this.outerWaypoints[0] }; }
-  getInnerSpawnPoint(): Vec2 { return this.innerWaypoints.length > 0 ? { ...this.innerWaypoints[0] } : this.getSpawnPoint(); }
+  /** 获取出怪口位置 */
+  getSpawnPoint(): Vec2 { return { ...this.spawnPoint }; }
+
+  /** 怪物生成时的路径（单跑道，所有怪物走同一条路） */
+  getSpawnWaypoints(): Vec2[] { return this.waypoints; }
+
+  /** 内圈（兼容旧接口，单跑道版本无内圈，返回同一路径） */
+  getInnerWaypoints(): Vec2[] { return this.waypoints; }
+  hasInnerRing(): boolean { return false; }
+  getInnerSpawnPoint(): Vec2 { return this.getSpawnPoint(); }
+
+  /** 路径瓦片检测 */
   isPathTile(col: number, row: number): boolean { return this.pathTiles.has(`${col},${row}`); }
   isBuildable(col: number, row: number): boolean { return this.buildableTiles.has(`${col},${row}`); }
   getPathTiles(): Set<string> { return this.pathTiles; }
 
+  /** 获取下一个 waypoint（用于预瞄等逻辑） */
   getNextWaypoint(currentIndex: number): { point: Vec2; index: number } {
-    const nextIndex = (currentIndex + 1) % this.outerWaypoints.length;
-    return { point: this.outerWaypoints[nextIndex], index: nextIndex };
+    const nextIndex = (currentIndex + 1) % this.waypoints.length;
+    return { point: this.waypoints[nextIndex], index: nextIndex };
   }
 }

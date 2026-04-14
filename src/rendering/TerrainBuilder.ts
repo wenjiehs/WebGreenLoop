@@ -2,9 +2,13 @@ import * as THREE from 'three';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../utils/constants';
 import { ThreeRenderer } from './ThreeRenderer';
 
+// 高度常量
+const BANK_Y = 0.15;      // 岸/草地平台高度
+const PATH_Y = -0.18;     // 路面底部高度
+const GROUND_Y = 0.10;    // 草地平面高度
+
 /**
- * 地形生成器 — 魔兽争霸风格的明亮绿色草地
- * 鲜艳草地 + 石砖路径 + 路沿石 + 大量装饰(树林/岩石/灌木/花/火把/蘑菇/草丛)
+ * 地形生成器 — 沟壑跑道 + 绿色草地高台
  */
 export class TerrainBuilder {
   private group: THREE.Group;
@@ -16,57 +20,48 @@ export class TerrainBuilder {
   build(pathTiles: Set<string>): THREE.Group {
     this.buildGround();
     this.buildPath(pathTiles);
-    this.buildPathBorder(pathTiles);
-    this.buildBuildableGrid(pathTiles);
+    this.buildBanks(pathTiles);
     this.buildDecorations(pathTiles);
-    this.buildGrassPatches(pathTiles);
     return this.group;
   }
 
-  /** 鲜明绿色草地 + 微起伏 */
+  /** 大地草地平面 */
   private buildGround(): void {
     const w = GAME_WIDTH * ThreeRenderer.SCALE;
     const h = (GAME_HEIGHT - 140) * ThreeRenderer.SCALE;
 
-    const grassGeo = new THREE.PlaneGeometry(w * 1.4, h * 1.4, 80, 60);
+    const grassGeo = new THREE.PlaneGeometry(w * 1.5, h * 1.5, 80, 60);
     const pos = grassGeo.getAttribute('position');
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i); const z = pos.getZ(i);
-      const noise = Math.sin(x * 1.5) * Math.cos(z * 2.0) * 0.15
-        + Math.sin(x * 3.5 + 1.3) * Math.cos(z * 2.8 - 0.7) * 0.06
-        + Math.sin(x * 7 + 2.5) * Math.cos(z * 6.3) * 0.02;
-      pos.setY(i, noise);
+      pos.setY(i, Math.sin(x * 1.2) * Math.cos(z * 1.5) * 0.08 + Math.sin(x * 4) * Math.cos(z * 3) * 0.02);
     }
     grassGeo.computeVertexNormals();
 
-    // 鲜明绿色顶点色 — 像魔兽争霸的 Felwood/Lordaeron 草地
     const colors = new Float32Array(pos.count * 3);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i); const z = pos.getZ(i);
-      const n1 = (Math.sin(x * 6 + 0.5) * Math.cos(z * 5) + 1) * 0.5;
-      const n2 = (Math.sin(x * 13 + 2) * Math.cos(z * 11 - 1) + 1) * 0.5;
-      const base = 0.22 + n1 * 0.12 + n2 * 0.06;
-      // 鲜绿色为主
-      colors[i * 3]     = base * 0.55 + Math.random() * 0.04;  // R
-      colors[i * 3 + 1] = base * 1.5  + Math.random() * 0.06;  // G（高绿）
-      colors[i * 3 + 2] = base * 0.3  + Math.random() * 0.03;  // B
+      const n = (Math.sin(x * 5 + 0.5) * Math.cos(z * 4) + 1) * 0.5;
+      const base = 0.25 + n * 0.1;
+      colors[i * 3]     = base * 0.45;
+      colors[i * 3 + 1] = base * 1.4;
+      colors[i * 3 + 2] = base * 0.25;
     }
     grassGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const grass = new THREE.Mesh(grassGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
     grass.rotation.x = -Math.PI / 2;
     grass.receiveShadow = true;
-    grass.position.y = 0.08; // 草地平面高于路面(y=-0.15)，形成自然高台
+    grass.position.y = GROUND_Y;
     this.group.add(grass);
   }
 
-  /** 路面 — 凹下去的石砖路 */
+  /** 凹陷路面 */
   private buildPath(pathTiles: Set<string>): void {
     const ts = TILE_SIZE * ThreeRenderer.SCALE;
     const tiles = Array.from(pathTiles);
     const dummy = new THREE.Object3D();
 
-    // 所有路径格子的路面底部（在草地平面以下）
     const pathMesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(ts * 0.99, 0.04, ts * 0.99),
       new THREE.MeshLambertMaterial({ color: 0x7a6345 }),
@@ -77,400 +72,261 @@ export class TerrainBuilder {
     tiles.forEach((key, i) => {
       const [c, r] = key.split(',').map(Number);
       const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
-      // 路面在 y=-0.15 (草地在 y=0.15，落差0.3)
-      dummy.position.set(p.x, -0.15, p.z);
+      dummy.position.set(p.x, PATH_Y, p.z);
       dummy.updateMatrix();
       pathMesh.setMatrixAt(i, dummy.matrix);
       const v = 0.38 + Math.random() * 0.14;
-      pathMesh.setColorAt(i, new THREE.Color(v, v * 0.75, v * 0.52));
+      pathMesh.setColorAt(i, new THREE.Color(v, v * 0.72, v * 0.5));
     });
     pathMesh.instanceColor!.needsUpdate = true;
     this.group.add(pathMesh);
 
-    // 砖缝线
+    // 砖缝
     const lineGeo = new THREE.BufferGeometry();
-    const lineVerts: number[] = [];
+    const verts: number[] = [];
     tiles.forEach(key => {
       const [c, r] = key.split(',').map(Number);
       const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
-      const half = ts * 0.47;
-      const ly = -0.125;
-      lineVerts.push(p.x - half, ly, p.z, p.x + half, ly, p.z);
-      lineVerts.push(p.x, ly, p.z - half, p.x, ly, p.z + half);
+      const half = ts * 0.46;
+      const ly = PATH_Y + 0.025;
+      verts.push(p.x - half, ly, p.z, p.x + half, ly, p.z);
+      verts.push(p.x, ly, p.z - half, p.x, ly, p.z + half);
     });
-    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(lineVerts, 3));
-    this.group.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x3a2a15, transparent: true, opacity: 0.25 })));
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    this.group.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x2a1a05, transparent: true, opacity: 0.2 })));
   }
 
-  /** 沟壑边缘 — 用草地块覆盖路径两侧形成高台，路面看起来是凹下去的 */
-  private buildPathBorder(pathTiles: Set<string>): void {
+  /** 沟壑岸壁 — 路径旁的绿色土块+泥土侧面+顶部草皮 */
+  private buildBanks(pathTiles: Set<string>): void {
     const ts = TILE_SIZE * ThreeRenderer.SCALE;
     const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
     const rows = Math.floor((GAME_HEIGHT - 140) / TILE_SIZE);
     const dummy = new THREE.Object3D();
 
-    // 在路径相邻的非路径格子上放"草地高台"（绿色方块y=0~0.15）
-    // 这些方块会遮住路面边缘，形成悬崖效果
-    const edgeGrassKeys: string[] = [];
+    // 找路径相邻的非路径格
+    const bankKeys: string[] = [];
     for (let c = 0; c < cols; c++) {
       for (let r = 0; r < rows; r++) {
         if (pathTiles.has(`${c},${r}`)) continue;
-        // 检查是否与路径相邻
-        const adjPath = [[c-1,r],[c+1,r],[c,r-1],[c,r+1]].some(([nc, nr]) => pathTiles.has(`${nc},${nr}`));
-        if (adjPath) edgeGrassKeys.push(`${c},${r}`);
+        if ([[c-1,r],[c+1,r],[c,r-1],[c,r+1]].some(([nc, nr]) => pathTiles.has(`${nc},${nr}`))) {
+          bankKeys.push(`${c},${r}`);
+        }
       }
     }
+    if (bankKeys.length === 0) return;
 
-    if (edgeGrassKeys.length === 0) return;
+    const bankH = BANK_Y - PATH_Y; // 岸高度 = 0.33
 
-    // 草地高台块 — 绿色厚方块，形成沟壑的"岸"
-    const bankMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(ts * 1.02, 0.32, ts * 1.02),
-      new THREE.MeshLambertMaterial({ color: 0x4a8a3a }),
-      edgeGrassKeys.length,
+    // 泥土层（棕色，从路面延伸到草地高度）
+    const dirtMesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(ts * 1.01, bankH, ts * 1.01),
+      new THREE.MeshLambertMaterial({ color: 0x6B5B3A }),
+      bankKeys.length,
     );
-    bankMesh.receiveShadow = true;
-    bankMesh.castShadow = true;
+    dirtMesh.receiveShadow = true;
+    dirtMesh.castShadow = true;
 
-    edgeGrassKeys.forEach((key, i) => {
+    bankKeys.forEach((key, i) => {
       const [c, r] = key.split(',').map(Number);
       const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
-      // 方块底部在 y=-0.15（和路面齐平），顶部在 y=0.17（高于地面）
-      dummy.position.set(p.x, 0.01, p.z);
+      dummy.position.set(p.x, PATH_Y + bankH / 2, p.z);
       dummy.updateMatrix();
-      bankMesh.setMatrixAt(i, dummy.matrix);
-      // 绿色调变化
-      const g = 0.35 + Math.random() * 0.15;
-      bankMesh.setColorAt(i, new THREE.Color(g * 0.5, g, g * 0.3));
+      dirtMesh.setMatrixAt(i, dummy.matrix);
+      const s = 0.32 + Math.random() * 0.08;
+      dirtMesh.setColorAt(i, new THREE.Color(s, s * 0.78, s * 0.5));
     });
-    bankMesh.instanceColor!.needsUpdate = true;
-    this.group.add(bankMesh);
+    dirtMesh.instanceColor!.needsUpdate = true;
+    this.group.add(dirtMesh);
 
-    // 顶部石沿（路径边缘的装饰条）
+    // 草皮顶层（深绿色薄板覆盖在泥土上面）
+    const grassCapMesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(ts * 1.03, 0.04, ts * 1.03),
+      new THREE.MeshLambertMaterial({ color: 0x3A7A2A }),
+      bankKeys.length,
+    );
+    grassCapMesh.receiveShadow = true;
+
+    bankKeys.forEach((key, i) => {
+      const [c, r] = key.split(',').map(Number);
+      const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
+      dummy.position.set(p.x, BANK_Y + 0.02, p.z);
+      dummy.updateMatrix();
+      grassCapMesh.setMatrixAt(i, dummy.matrix);
+      const g = 0.28 + Math.random() * 0.12;
+      grassCapMesh.setColorAt(i, new THREE.Color(g * 0.45, g, g * 0.25));
+    });
+    grassCapMesh.instanceColor!.needsUpdate = true;
+    this.group.add(grassCapMesh);
+
+    // 石沿（路面侧的装饰石条）
     const pathEdgeTiles = Array.from(pathTiles).filter(key => {
       const [c, r] = key.split(',').map(Number);
       return [[c-1,r],[c+1,r],[c,r-1],[c,r+1]].some(([nc, nr]) => !pathTiles.has(`${nc},${nr}`));
     });
-
     if (pathEdgeTiles.length > 0) {
-      const capMesh = new THREE.InstancedMesh(
-        new THREE.BoxGeometry(ts * 1.04, 0.05, ts * 1.04),
-        new THREE.MeshLambertMaterial({ color: 0x6a5a3a }),
+      const stoneMesh = new THREE.InstancedMesh(
+        new THREE.BoxGeometry(ts * 1.04, 0.06, ts * 1.04),
+        new THREE.MeshLambertMaterial({ color: 0x8A7A5A }),
         pathEdgeTiles.length,
       );
-      capMesh.receiveShadow = true;
-
+      stoneMesh.receiveShadow = true;
       pathEdgeTiles.forEach((key, i) => {
         const [c, r] = key.split(',').map(Number);
         const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0);
-        dummy.position.set(p.x, -0.12, p.z);
+        dummy.position.set(p.x, PATH_Y + 0.04, p.z);
         dummy.updateMatrix();
-        capMesh.setMatrixAt(i, dummy.matrix);
+        stoneMesh.setMatrixAt(i, dummy.matrix);
       });
-      this.group.add(capMesh);
+      this.group.add(stoneMesh);
     }
   }
 
-  /** 可建造网格 — 非常淡 */
-  private buildBuildableGrid(pathTiles: Set<string>): void {
-    const ts = TILE_SIZE * ThreeRenderer.SCALE;
-    const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
-    const rows = Math.floor((GAME_HEIGHT - 140) / TILE_SIZE);
-    const verts: number[] = [];
-
-    for (let c = 0; c < cols; c++) {
-      for (let r = 0; r < rows; r++) {
-        if (pathTiles.has(`${c},${r}`)) continue;
-        if (r >= rows - 3) continue;
-        const p = ThreeRenderer.toWorld(c * TILE_SIZE + TILE_SIZE / 2, r * TILE_SIZE + TILE_SIZE / 2, 0.005);
-        const half = ts * 0.49;
-        verts.push(p.x - half, p.y, p.z - half, p.x + half, p.y, p.z - half);
-        verts.push(p.x + half, p.y, p.z - half, p.x + half, p.y, p.z + half);
-        verts.push(p.x + half, p.y, p.z + half, p.x - half, p.y, p.z + half);
-        verts.push(p.x - half, p.y, p.z + half, p.x - half, p.y, p.z - half);
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    // 非常淡，几乎看不见，hover 时才需要看到
-    this.group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x88CC88, transparent: true, opacity: 0.03 })));
-  }
-
-  /** 大量装饰物 — 让地图生机勃勃 */
+  /** 装饰物 — 都放在岸上(y=BANK_Y) */
   private buildDecorations(pathTiles: Set<string>): void {
     const decoGroup = new THREE.Group();
     const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
     const rows = Math.floor((GAME_HEIGHT - 140) / TILE_SIZE);
+    const BY = BANK_Y + 0.02; // 装饰物基准高度
 
-    // 300+ 装饰物（比之前 120 多很多）
-    for (let i = 0; i < 350; i++) {
+    for (let i = 0; i < 400; i++) {
       const c = Math.floor(Math.random() * cols);
       const r = Math.floor(Math.random() * rows);
       if (pathTiles.has(`${c},${r}`)) continue;
 
-      const nearPath = [[c-1,r],[c+1,r],[c,r-1],[c,r+1]].some(([nc, nr]) => pathTiles.has(`${nc},${nr}`));
-
       const px = c * TILE_SIZE + TILE_SIZE / 2 + (Math.random() - 0.5) * TILE_SIZE * 0.6;
       const py = r * TILE_SIZE + TILE_SIZE / 2 + (Math.random() - 0.5) * TILE_SIZE * 0.6;
-      const pos = ThreeRenderer.toWorld(px, py, 0);
+      const wp = ThreeRenderer.toWorld(px, py, 0);
+      const pos = new THREE.Vector3(wp.x, BY, wp.z);
 
+      const nearPath = [[c-1,r],[c+1,r],[c,r-1],[c,r+1]].some(([nc, nr]) => pathTiles.has(`${nc},${nr}`));
       const rand = Math.random();
-      if (rand < 0.25) {
-        decoGroup.add(this.createTree(pos, 0.3 + Math.random() * 0.5));
-      } else if (rand < 0.38) {
-        decoGroup.add(this.createRock(pos, 0.06 + Math.random() * 0.12));
-      } else if (rand < 0.52) {
-        decoGroup.add(this.createBush(pos, 0.1 + Math.random() * 0.15));
-      } else if (rand < 0.68) {
-        decoGroup.add(this.createFlowers(pos));
-      } else if (rand < 0.78) {
-        decoGroup.add(this.createMushroom(pos));
-      } else if (rand < 0.88) {
-        decoGroup.add(this.createTallGrass(pos));
-      } else if (nearPath && rand > 0.94) {
-        decoGroup.add(this.createTorch(pos));
-      } else if (nearPath && rand > 0.90) {
-        decoGroup.add(this.createFencePost(pos));
-      }
+
+      if (rand < 0.22) decoGroup.add(this.makeTree(pos));
+      else if (rand < 0.34) decoGroup.add(this.makeRock(pos));
+      else if (rand < 0.48) decoGroup.add(this.makeBush(pos));
+      else if (rand < 0.60) decoGroup.add(this.makeFlowers(pos));
+      else if (rand < 0.70) decoGroup.add(this.makeGrassClump(pos));
+      else if (nearPath && rand > 0.92) decoGroup.add(this.makeTorch(pos));
     }
 
-    // 路径旁的火把（沿跑道每隔几格一个）
+    // 沿路火把
     const pathArr = Array.from(pathTiles);
-    for (let i = 0; i < pathArr.length; i += 8) {
+    for (let i = 0; i < pathArr.length; i += 10) {
       const [c, r] = pathArr[i].split(',').map(Number);
-      // 找相邻的空格放火把
       for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]]) {
         const nc = c + dc, nr = r + dr;
         if (!pathTiles.has(`${nc},${nr}`)) {
-          const px = nc * TILE_SIZE + TILE_SIZE / 2;
-          const py = nr * TILE_SIZE + TILE_SIZE / 2;
-          decoGroup.add(this.createTorch(ThreeRenderer.toWorld(px, py, 0)));
+          const wp = ThreeRenderer.toWorld(nc * TILE_SIZE + TILE_SIZE / 2, nr * TILE_SIZE + TILE_SIZE / 2, 0);
+          decoGroup.add(this.makeTorch(new THREE.Vector3(wp.x, BY, wp.z)));
           break;
         }
       }
     }
-
     this.group.add(decoGroup);
   }
 
-  /** 草丛点缀 — 让草地不平坦 */
-  private buildGrassPatches(pathTiles: Set<string>): void {
-    const cols = Math.floor(GAME_WIDTH / TILE_SIZE);
-    const rows = Math.floor((GAME_HEIGHT - 140) / TILE_SIZE);
-    const patchGroup = new THREE.Group();
+  // ===== 装饰物 =====
 
-    for (let i = 0; i < 200; i++) {
-      const c = Math.floor(Math.random() * cols);
-      const r = Math.floor(Math.random() * rows);
-      if (pathTiles.has(`${c},${r}`)) continue;
-
-      const px = c * TILE_SIZE + TILE_SIZE / 2 + (Math.random() - 0.5) * TILE_SIZE;
-      const py = r * TILE_SIZE + TILE_SIZE / 2 + (Math.random() - 0.5) * TILE_SIZE;
-      const pos = ThreeRenderer.toWorld(px, py, 0);
-
-      // 小绿色半球（草丛）
-      const patch = new THREE.Mesh(
-        new THREE.SphereGeometry(0.03 + Math.random() * 0.04, 4, 3, 0, Math.PI * 2, 0, Math.PI * 0.5),
-        new THREE.MeshLambertMaterial({
-          color: new THREE.Color(0.1 + Math.random() * 0.08, 0.35 + Math.random() * 0.2, 0.08 + Math.random() * 0.05),
-        }),
-      );
-      patch.rotation.x = -Math.PI / 2;
-      patch.position.set(pos.x, 0.005, pos.z);
-      patchGroup.add(patch);
-    }
-    this.group.add(patchGroup);
-  }
-
-  // =================== 装饰物工厂 ===================
-
-  private createTree(pos: THREE.Vector3, scale: number): THREE.Group {
-    const tree = new THREE.Group();
-
-    // 树干（更粗更明显）
+  private makeTree(pos: THREE.Vector3): THREE.Group {
+    const g = new THREE.Group();
+    const s = 0.3 + Math.random() * 0.5;
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04 * scale, 0.07 * scale, 0.45 * scale, 5),
-      new THREE.MeshLambertMaterial({ color: 0x7B4A2F }),
+      new THREE.CylinderGeometry(0.03 * s, 0.06 * s, 0.4 * s, 5),
+      new THREE.MeshLambertMaterial({ color: 0x6B4422 }),
     );
-    trunk.position.set(pos.x, 0.225 * scale, pos.z);
+    trunk.position.set(pos.x, pos.y + 0.2 * s, pos.z);
     trunk.castShadow = true;
-    tree.add(trunk);
-
-    // 树冠（3层锥体，颜色更鲜明）
-    for (let layer = 0; layer < 3; layer++) {
-      const r = (0.22 - layer * 0.05) * scale;
-      const h = 0.22 * scale;
+    g.add(trunk);
+    for (let l = 0; l < 3; l++) {
+      const cr = (0.20 - l * 0.04) * s;
       const crown = new THREE.Mesh(
-        new THREE.ConeGeometry(r, h, 6),
-        new THREE.MeshLambertMaterial({
-          color: new THREE.Color(0.06 + Math.random() * 0.06, 0.35 + Math.random() * 0.2, 0.04 + Math.random() * 0.04),
-        }),
+        new THREE.ConeGeometry(cr, 0.2 * s, 6),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(0.05 + Math.random() * 0.05, 0.3 + Math.random() * 0.18, 0.03 + Math.random() * 0.03) }),
       );
-      crown.position.set(pos.x, (0.38 + layer * 0.13) * scale, pos.z);
+      crown.position.set(pos.x, pos.y + (0.35 + l * 0.12) * s, pos.z);
       crown.castShadow = true;
-      tree.add(crown);
+      g.add(crown);
     }
-    return tree;
+    return g;
   }
 
-  private createRock(pos: THREE.Vector3, scale: number): THREE.Mesh {
+  private makeRock(pos: THREE.Vector3): THREE.Mesh {
+    const s = 0.05 + Math.random() * 0.1;
     const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(scale, 0),
-      new THREE.MeshLambertMaterial({
-        color: new THREE.Color(0.45 + Math.random() * 0.15, 0.42 + Math.random() * 0.1, 0.38 + Math.random() * 0.05),
-      }),
+      new THREE.DodecahedronGeometry(s, 0),
+      new THREE.MeshLambertMaterial({ color: new THREE.Color(0.45 + Math.random() * 0.12, 0.42 + Math.random() * 0.08, 0.38) }),
     );
-    rock.position.set(pos.x, scale * 0.3, pos.z);
+    rock.position.set(pos.x, pos.y + s * 0.2, pos.z);
     rock.rotation.set(Math.random(), Math.random(), Math.random());
-    rock.scale.y = 0.55;
+    rock.scale.y = 0.5;
     rock.castShadow = true;
     return rock;
   }
 
-  private createBush(pos: THREE.Vector3, scale: number): THREE.Group {
-    const bush = new THREE.Group();
-    for (let i = 0; i < 4; i++) {
-      const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(scale * (0.5 + Math.random() * 0.5), 5, 4),
-        new THREE.MeshLambertMaterial({
-          color: new THREE.Color(0.08 + Math.random() * 0.06, 0.3 + Math.random() * 0.15, 0.06 + Math.random() * 0.04),
-        }),
+  private makeBush(pos: THREE.Vector3): THREE.Group {
+    const g = new THREE.Group();
+    const s = 0.08 + Math.random() * 0.12;
+    for (let i = 0; i < 3; i++) {
+      const sp = new THREE.Mesh(
+        new THREE.SphereGeometry(s * (0.5 + Math.random() * 0.5), 5, 4),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(0.06, 0.25 + Math.random() * 0.15, 0.04) }),
       );
-      sphere.position.set(
-        pos.x + (Math.random() - 0.5) * scale * 0.6,
-        scale * 0.3,
-        pos.z + (Math.random() - 0.5) * scale * 0.6,
-      );
-      sphere.scale.y = 0.65;
-      sphere.castShadow = true;
-      bush.add(sphere);
+      sp.position.set(pos.x + (Math.random() - 0.5) * s, pos.y + s * 0.25, pos.z + (Math.random() - 0.5) * s);
+      sp.scale.y = 0.6;
+      sp.castShadow = true;
+      g.add(sp);
     }
-    return bush;
+    return g;
   }
 
-  private createFlowers(pos: THREE.Vector3): THREE.Group {
-    const flowers = new THREE.Group();
-    const flowerColors = [0xFF6688, 0xFFCC44, 0xFF88CC, 0xFFFFAA, 0xCC88FF, 0xFF9944, 0x88DDFF];
-    for (let i = 0; i < 4 + Math.floor(Math.random() * 4); i++) {
-      // 花茎
-      const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.003, 0.003, 0.04, 3),
-        new THREE.MeshLambertMaterial({ color: 0x338833 }),
-      );
-      const ox = (Math.random() - 0.5) * 0.15;
-      const oz = (Math.random() - 0.5) * 0.15;
-      stem.position.set(pos.x + ox, 0.02, pos.z + oz);
-      flowers.add(stem);
-
-      // 花朵
+  private makeFlowers(pos: THREE.Vector3): THREE.Group {
+    const g = new THREE.Group();
+    const colors = [0xFF6688, 0xFFCC44, 0xFF88CC, 0xFFFFAA, 0xCC88FF, 0xFF9944];
+    for (let i = 0; i < 3 + Math.floor(Math.random() * 4); i++) {
+      const ox = (Math.random() - 0.5) * 0.12;
+      const oz = (Math.random() - 0.5) * 0.12;
       const f = new THREE.Mesh(
-        new THREE.SphereGeometry(0.018 + Math.random() * 0.01, 4, 3),
-        new THREE.MeshBasicMaterial({ color: flowerColors[Math.floor(Math.random() * flowerColors.length)] }),
+        new THREE.SphereGeometry(0.015 + Math.random() * 0.008, 4, 3),
+        new THREE.MeshBasicMaterial({ color: colors[Math.floor(Math.random() * colors.length)] }),
       );
-      f.position.set(pos.x + ox, 0.04 + Math.random() * 0.01, pos.z + oz);
-      flowers.add(f);
+      f.position.set(pos.x + ox, pos.y + 0.02, pos.z + oz);
+      g.add(f);
     }
-    return flowers;
+    return g;
   }
 
-  private createMushroom(pos: THREE.Vector3): THREE.Group {
-    const mush = new THREE.Group();
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.008, 0.012, 0.03, 4),
-      new THREE.MeshLambertMaterial({ color: 0xEEDDCC }),
-    );
-    stem.position.set(pos.x, 0.015, pos.z);
-    mush.add(stem);
-
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(0.022, 6, 4, 0, Math.PI * 2, 0, Math.PI * 0.6),
-      new THREE.MeshLambertMaterial({
-        color: Math.random() > 0.5 ? 0xDD4444 : 0xCC8844,
-      }),
-    );
-    cap.position.set(pos.x, 0.032, pos.z);
-    mush.add(cap);
-    return mush;
-  }
-
-  private createTallGrass(pos: THREE.Vector3): THREE.Group {
-    const tg = new THREE.Group();
-    for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) {
+  private makeGrassClump(pos: THREE.Vector3): THREE.Group {
+    const g = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
       const blade = new THREE.Mesh(
-        new THREE.ConeGeometry(0.005, 0.06 + Math.random() * 0.04, 3),
-        new THREE.MeshLambertMaterial({
-          color: new THREE.Color(0.15 + Math.random() * 0.1, 0.4 + Math.random() * 0.2, 0.1),
-        }),
+        new THREE.ConeGeometry(0.005, 0.05 + Math.random() * 0.04, 3),
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(0.12, 0.38 + Math.random() * 0.18, 0.08) }),
       );
-      blade.position.set(
-        pos.x + (Math.random() - 0.5) * 0.06,
-        0.03 + Math.random() * 0.02,
-        pos.z + (Math.random() - 0.5) * 0.06,
-      );
-      blade.rotation.z = (Math.random() - 0.5) * 0.3;
-      tg.add(blade);
+      blade.position.set(pos.x + (Math.random() - 0.5) * 0.05, pos.y + 0.025, pos.z + (Math.random() - 0.5) * 0.05);
+      blade.rotation.z = (Math.random() - 0.5) * 0.25;
+      g.add(blade);
     }
-    return tg;
+    return g;
   }
 
-  private createTorch(pos: THREE.Vector3): THREE.Group {
-    const torch = new THREE.Group();
+  private makeTorch(pos: THREE.Vector3): THREE.Group {
+    const g = new THREE.Group();
     const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.012, 0.018, 0.35, 4),
+      new THREE.CylinderGeometry(0.01, 0.015, 0.3, 4),
       new THREE.MeshLambertMaterial({ color: 0x6B3A1F }),
     );
-    pole.position.set(pos.x, 0.175, pos.z);
+    pole.position.set(pos.x, pos.y + 0.15, pos.z);
     pole.castShadow = true;
-    torch.add(pole);
-
-    // 火盆
-    const bowl = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.025, 0.015, 0.02, 6),
-      new THREE.MeshLambertMaterial({ color: 0x444444 }),
-    );
-    bowl.position.set(pos.x, 0.36, pos.z);
-    torch.add(bowl);
-
-    // 火焰（多层）
-    const flame1 = new THREE.Mesh(
-      new THREE.ConeGeometry(0.02, 0.06, 4),
+    g.add(pole);
+    const flame = new THREE.Mesh(
+      new THREE.ConeGeometry(0.018, 0.05, 4),
       new THREE.MeshBasicMaterial({ color: 0xFF8822 }),
     );
-    flame1.position.set(pos.x, 0.40, pos.z);
-    torch.add(flame1);
-
-    const flame2 = new THREE.Mesh(
-      new THREE.ConeGeometry(0.012, 0.04, 3),
-      new THREE.MeshBasicMaterial({ color: 0xFFCC44 }),
-    );
-    flame2.position.set(pos.x, 0.42, pos.z);
-    torch.add(flame2);
-
-    // 暖色点光源
-    const light = new THREE.PointLight(0xFF8833, 0.5, 3);
-    light.position.set(pos.x, 0.42, pos.z);
-    torch.add(light);
-
-    return torch;
-  }
-
-  private createFencePost(pos: THREE.Vector3): THREE.Group {
-    const fence = new THREE.Group();
-    const post = new THREE.Mesh(
-      new THREE.BoxGeometry(0.02, 0.15, 0.02),
-      new THREE.MeshLambertMaterial({ color: 0x8B6B4F }),
-    );
-    post.position.set(pos.x, 0.075, pos.z);
-    post.castShadow = true;
-    fence.add(post);
-
-    // 顶部
-    const cap = new THREE.Mesh(
-      new THREE.ConeGeometry(0.018, 0.025, 4),
-      new THREE.MeshLambertMaterial({ color: 0x6B4B2F }),
-    );
-    cap.position.set(pos.x, 0.16, pos.z);
-    fence.add(cap);
-    return fence;
+    flame.position.set(pos.x, pos.y + 0.32, pos.z);
+    g.add(flame);
+    const light = new THREE.PointLight(0xFF8833, 0.4, 2.5);
+    light.position.set(pos.x, pos.y + 0.33, pos.z);
+    g.add(light);
+    return g;
   }
 }

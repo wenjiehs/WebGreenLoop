@@ -103,12 +103,16 @@ export class TerrainBuilder {
     const rows = Math.floor((GAME_HEIGHT - 140) / TILE_SIZE);
     const dummy = new THREE.Object3D();
 
-    // 找路径相邻的非路径格
+    // 找路径相邻的非路径格（8方向，含对角线，填满角落）
     const bankKeys: string[] = [];
     for (let c = 0; c < cols; c++) {
       for (let r = 0; r < rows; r++) {
         if (pathTiles.has(`${c},${r}`)) continue;
-        if ([[c-1,r],[c+1,r],[c,r-1],[c,r+1]].some(([nc, nr]) => pathTiles.has(`${nc},${nr}`))) {
+        const neighbors = [
+          [c-1,r],[c+1,r],[c,r-1],[c,r+1],  // 正交
+          [c-1,r-1],[c+1,r-1],[c-1,r+1],[c+1,r+1],  // 对角
+        ];
+        if (neighbors.some(([nc, nr]) => pathTiles.has(`${nc},${nr}`))) {
           bankKeys.push(`${c},${r}`);
         }
       }
@@ -178,6 +182,56 @@ export class TerrainBuilder {
         stoneMesh.setMatrixAt(i, dummy.matrix);
       });
       this.group.add(stoneMesh);
+    }
+
+    // 角落圆滑 — 在岸壁的"外角"放圆柱体填充
+    const bankSet = new Set(bankKeys);
+    const cornerPositions: THREE.Vector3[] = [];
+    for (const key of bankKeys) {
+      const [c, r] = key.split(',').map(Number);
+      // 检测外角：正交方向有两个不是bank/path的格子
+      const dirs: [number, number][] = [[-1,0],[1,0],[0,-1],[0,1]];
+      const diags: [number, number, number, number][] = [
+        [-1,-1, -1,0, 0,-1], [1,-1, 1,0, 0,-1],
+        [-1,1, -1,0, 0,1], [1,1, 1,0, 0,1],
+      ] as any;
+      // 找到当前格子暴露在外的角
+      for (const [dx, dy] of [[-1,-1],[1,-1],[-1,1],[1,1]] as [number,number][]) {
+        const diagKey = `${c+dx},${r+dy}`;
+        const adjX = `${c+dx},${r}`;
+        const adjY = `${c},${r+dy}`;
+        // 如果对角格不是bank也不是path，而两个正交邻居中至少一个也不是bank
+        if (!bankSet.has(diagKey) && !pathTiles.has(diagKey)) {
+          if (!bankSet.has(adjX) && !pathTiles.has(adjX) && !bankSet.has(adjY) && !pathTiles.has(adjY)) {
+            // 这是一个外角 — 在格子的这个角放圆柱
+            const p = ThreeRenderer.toWorld(
+              (c + dx * 0.5) * TILE_SIZE + TILE_SIZE / 2,
+              (r + dy * 0.5) * TILE_SIZE + TILE_SIZE / 2, 0
+            );
+            cornerPositions.push(new THREE.Vector3(p.x, 0, p.z));
+          }
+        }
+      }
+    }
+
+    // 用圆柱体填充角落
+    for (const cp of cornerPositions) {
+      const dirtCyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(ts * 0.52, ts * 0.52, bankH, 8),
+        new THREE.MeshLambertMaterial({ color: 0x6B5B3A }),
+      );
+      dirtCyl.position.set(cp.x, PATH_Y + bankH / 2, cp.z);
+      dirtCyl.receiveShadow = true;
+      dirtCyl.castShadow = true;
+      this.group.add(dirtCyl);
+
+      const grassCyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(ts * 0.54, ts * 0.54, 0.04, 8),
+        new THREE.MeshLambertMaterial({ color: 0x3A7A2A }),
+      );
+      grassCyl.position.set(cp.x, BANK_Y + 0.02, cp.z);
+      grassCyl.receiveShadow = true;
+      this.group.add(grassCyl);
     }
   }
 
